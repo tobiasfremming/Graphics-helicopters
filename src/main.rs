@@ -1,16 +1,17 @@
 // Uncomment these following global attributes to silence most warnings of "low" interest:
-/*
+
 #![allow(dead_code)]
 #![allow(non_snake_case)]
 #![allow(unreachable_code)]
 #![allow(unused_mut)]
 #![allow(unused_unsafe)]
 #![allow(unused_variables)]
-*/
+
 extern crate nalgebra_glm as glm;
 use std::{ mem, ptr, os::raw::c_void };
 use std::thread;
 use std::sync::{Mutex, Arc, RwLock};
+use std::time::Instant;
 
 mod shader;
 mod util;
@@ -67,12 +68,79 @@ unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>) -> u32 {
     // * Fill it with data
     // * Return the ID of the VAO
 
-    0
+    // Generate the VAO
+    let mut vao: u32 = 0;
+    gl::GenVertexArrays(1, &mut vao);
+    gl::BindVertexArray(vao);
+
+    // Generate the VBO
+    let mut vbo: u32 = 0;
+    gl::GenBuffers(1, &mut vbo);
+    gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+    gl::BufferData(
+        gl::ARRAY_BUFFER,
+        (vertices.len() * std::mem::size_of::<f32>()) as isize,
+        vertices.as_ptr() as *const c_void,
+        gl::STATIC_DRAW,
+    );
+
+    // Generate the IBO
+    let mut ibo: u32 = 0;
+    gl::GenBuffers(1, &mut ibo);
+    gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ibo);
+    gl::BufferData(
+        gl::ELEMENT_ARRAY_BUFFER,
+        (indices.len() * std::mem::size_of::<u32>()) as isize,
+        indices.as_ptr() as *const c_void,
+        gl::STATIC_DRAW,
+    );
+
+    // Configure the VAP
+    gl::VertexAttribPointer(
+        0,
+        3,  // number of type_ to describe a vertex
+        gl::FLOAT,
+        gl::FALSE,
+        3 * std::mem::size_of::<f32>() as i32,
+        ptr::null(),
+    );
+    // Enable the VAP
+    gl::EnableVertexAttribArray(0);
+
+
+    vao
+
+
 }
+
+fn createSquare(uv: f32, offset_x: f32, offset_y: f32) -> Vec<f32> {
+    // Create a square with the given uv, offset_x and offset_y
+    // input: uv: f32, offset_x: f32, offset_y: f32
+    // output: Vec<f32>
+
+    let vertices: Vec<f32> = vec![
+        // Triangle 1 
+        
+        -uv + offset_x, -uv + offset_y, 0.0,   // Bottom left
+        uv + offset_x, -uv + offset_y, 0.0,    // Bottom right
+        -uv + offset_x, uv + offset_y, 0.0,    // Top left
+
+        // Triangle 2 
+        uv + offset_x, -uv  + offset_y, 0.0,    // Bottom right
+        uv + offset_x, uv  + offset_y, 0.0,     // Top right
+        -uv + offset_x, uv  + offset_y, 0.0,    // Top left
+       
+    ];
+    vertices
+}
+
 
 
 fn main() {
     // Set up the necessary objects to deal with windows and event handling
+    let start_time = Instant::now();
+
+
     let el = glutin::event_loop::EventLoop::new();
     let wb = glutin::window::WindowBuilder::new()
         .with_title("Gloom-rs")
@@ -144,6 +212,18 @@ fn main() {
         // This snippet is not enough to do the exercise, and will need to be modified (outside
         // of just using the correct path), but it only needs to be called once
 
+        let shader_program = unsafe {
+            shader::ShaderBuilder::new()
+                .attach_file("./shaders/simple.vert")
+                .attach_file("./shaders/simple.frag")
+                .link()
+        };
+    
+        // Activate the shader program
+        unsafe {
+            shader_program.activate();
+        }
+
         /*
         let simple_shader = unsafe {
             shader::ShaderBuilder::new()
@@ -151,6 +231,59 @@ fn main() {
                 .link()
         };
         */
+
+        // let vertices: Vec<f32> = vec![
+        //     // Triangle 1 
+        //     -1.0, -1.0, 0.0,   // Bottom left
+        //     1.0, -1.0, 0.0,    // Bottom right
+        //     -1.0, 1.0, 0.0,    // Top left
+
+        //     // Triangle 2 
+        //     1.0, -1.0, 0.0,    // Bottom right
+        //     1.0, 1.0, 0.0,     // Top right
+        //     -1.0, 1.0, 0.0,    // Top left
+
+        //     // // Triangle 3 
+        //     // -0.8, -0.8, 0.0,   // Bottom left
+        //     // -0.5, -1.0, 0.0,   // Bottom right
+        //     // -0.2, -0.5, 0.0,   // Top left
+
+        //     // // Triangle 4 
+        //     // 0.7, -0.7, 0.0,    // Bottom far right
+        //     // 0.7, -0.3, 0.0,    // Bottom right
+        //     // 0.4, -0.5, 0.0,    // Far bottom right
+
+        //     // // Triangle 5 
+        //     // 0.0, 0.1, 0.0,     // Center
+        //     // 0.4, 0.1, 0.0,     // Right of center
+        //     // 0.2, 0.5, 0.0,     // Above center
+        // ];
+        // I commented out what i did in the first task, so that you can still see it, but i will use the createSquare function to create the vertices for the square for the remainder of the tasks
+        let vertices: Vec<f32> = createSquare(1.0 ,  -0.0, -0.0);
+
+        let indices: Vec<u32> = vec![
+            0, 1, 2,  // Triangle 1
+            3, 4, 5,  // Triangle 2
+            6, 7, 8,  // Triangle 3
+            9, 10, 11, // Triangle 4
+            12, 13, 14, // Triangle 5
+        ];
+        // Create the VAO
+        let vao = unsafe {
+            create_vao(&vertices, &indices)
+        };
+
+        // Draw the VAO
+        unsafe {
+            gl::BindVertexArray(vao);
+            gl::DrawElements(
+                gl::TRIANGLES,
+                indices.len() as i32,
+                gl::UNSIGNED_INT,
+                std::ptr::null()
+            );
+        }
+        
 
 
         // Used to demonstrate keyboard handling for exercise 2.
@@ -215,8 +348,28 @@ fn main() {
                 gl::ClearColor(0.035, 0.046, 0.078, 1.0); // night sky
                 gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
-
+                // Pass the 'elapsed_time' to the 'time' uniform in the shader
+                let time_uniform_location = gl::GetUniformLocation(shader_program.program_id, "time".as_ptr() as *const i8);
+                gl::Uniform1f(time_uniform_location, elapsed);
                 // == // Issue the necessary gl:: commands to draw your scene here
+                shader_program.activate();
+                // Pass the 'elapsed_time' to the 'time' uniform in the shader
+                
+
+                // Bind the VAO
+                gl::BindVertexArray(vao);
+
+                // Draw the elements
+                gl::DrawElements(
+                    gl::TRIANGLES,
+                    indices.len() as i32,
+                    gl::UNSIGNED_INT,
+                    std::ptr::null()
+                );
+
+    // Unbind the VAO (optional, good practice to prevent accidental modifications)
+    gl::BindVertexArray(0);
+                
 
 
 
