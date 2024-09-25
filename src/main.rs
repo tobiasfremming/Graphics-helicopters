@@ -8,16 +8,39 @@
 #![allow(unused_variables)]
 
 extern crate nalgebra_glm as glm;
+use std::option::Iter;
 use std::{ mem, ptr, os::raw::c_void };
 use std::thread;
 use std::sync::{Mutex, Arc, RwLock};
 use std::time::Instant;
 
+
 mod shader;
 mod util;
 
+use glm::{normalize_dot, Mat4, Vec3};
+use glutin::event::ElementState;
 use glutin::event::{Event, WindowEvent, DeviceEvent, KeyboardInput, ElementState::{Pressed, Released}, VirtualKeyCode::{self, *}};
 use glutin::event_loop::ControlFlow;
+
+
+
+// Camera motion struct
+// struct CameraMotion {
+//     position: glm::Vec3,  // For position (x, y, z)
+//     rotation: glm::Vec3,  // For rotation (angle in radians for each axis)
+// }
+
+// impl CameraMotion {
+//     fn new() -> CameraMotion {
+//         CameraMotion {
+//             position: glm::vec3(0.0, 0.0, 0.0),  // Initialize at origin
+//             rotation: glm::vec3(0.0, 0.0, 0.0),  // Initialize with no rotation
+//         }
+//     }
+// }
+
+
 
 // initial window size
 const INITIAL_SCREEN_W: u32 = 800;
@@ -54,8 +77,8 @@ fn offset<T>(n: u32) -> *const c_void {
 
 
 // == // Generate your VAO here
-unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>) -> u32 {
-    // Implement me!
+unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f32>) -> u32 {
+    
 
     // Also, feel free to delete comments :)
 
@@ -72,17 +95,13 @@ unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>) -> u32 {
     let mut vao: u32 = 0;
     gl::GenVertexArrays(1, &mut vao);
     gl::BindVertexArray(vao);
+    
 
-    // Generate the VBO
-    let mut vbo: u32 = 0;
-    gl::GenBuffers(1, &mut vbo);
-    gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
-    gl::BufferData(
-        gl::ARRAY_BUFFER,
-        (vertices.len() * std::mem::size_of::<f32>()) as isize,
-        vertices.as_ptr() as *const c_void,
-        gl::STATIC_DRAW,
-    );
+    
+
+    
+    
+    
 
     // Generate the IBO
     let mut ibo: u32 = 0;
@@ -93,6 +112,18 @@ unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>) -> u32 {
         (indices.len() * std::mem::size_of::<u32>()) as isize,
         indices.as_ptr() as *const c_void,
         gl::STATIC_DRAW,
+    );
+
+    // Generate the VBO
+    let mut vbo: u32 = 0;
+    gl::GenBuffers(1, &mut vbo);
+    gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+    gl::BufferData(
+        gl::ARRAY_BUFFER,
+        (vertices.len() * std::mem::size_of::<f32>()) as isize,
+        vertices.as_ptr() as *const c_void,
+        gl::STATIC_DRAW,
+        
     );
 
     // Configure the VAP
@@ -108,31 +139,143 @@ unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>) -> u32 {
     gl::EnableVertexAttribArray(0);
 
 
+    // Generate the VBO for the colors
+    let mut color_vbo: u32 = 0;
+    gl::GenBuffers(1, &mut color_vbo);
+    gl::BindBuffer(gl::ARRAY_BUFFER, color_vbo);
+    gl::BufferData(
+        gl::ARRAY_BUFFER,
+        (colors.len() * std::mem::size_of::<f32>()) as isize,
+        colors.as_ptr() as *const c_void,
+        gl::STATIC_DRAW,
+    );
+
+    gl::VertexAttribPointer(
+        1,
+        4,                  // 4 components per color (r, g, b, a)
+        gl::FLOAT,
+        gl::FALSE,
+        4 * std::mem::size_of::<f32>() as i32, // stride: 4 floats per color
+        ptr::null(),
+    );
+    
+
+    // Enable the VAP
+    
+    gl::EnableVertexAttribArray(1);
+
+
     vao
 
 
 }
 
-fn createSquare(uv: f32, offset_x: f32, offset_y: f32) -> Vec<f32> {
-    // Create a square with the given uv, offset_x and offset_y
-    // input: uv: f32, offset_x: f32, offset_y: f32
-    // output: Vec<f32>
-
+fn create_square(uv: f32, offset_x: f32, offset_y: f32, offset_z: f32) -> Vec<f32> {
+    // Create a square with the given uv, offset_x, offset_y, and offset_z
     let vertices: Vec<f32> = vec![
-        // Triangle 1 
-        
-        -uv + offset_x, -uv + offset_y, 0.0,   // Bottom left
-        uv + offset_x, -uv + offset_y, 0.0,    // Bottom right
-        -uv + offset_x, uv + offset_y, 0.0,    // Top left
+        // Triangle 1
+        -uv + offset_x, -uv + offset_y, offset_z,   // Bottom left
+        uv + offset_x, -uv + offset_y, offset_z,    // Bottom right
+        -uv + offset_x, uv + offset_y, offset_z,    // Top left
 
         // Triangle 2 
-        uv + offset_x, -uv  + offset_y, 0.0,    // Bottom right
-        uv + offset_x, uv  + offset_y, 0.0,     // Top right
-        -uv + offset_x, uv  + offset_y, 0.0,    // Top left
-       
+        uv + offset_x, -uv + offset_y, offset_z,    // Bottom right
+        uv + offset_x, uv + offset_y, offset_z,     // Top right
+        -uv + offset_x, uv + offset_y, offset_z,    // Top left
     ];
     vertices
 }
+
+fn create_box(
+    start_point: (f32, f32, f32), 
+    width: f32, 
+    height: f32, 
+    depth: f32
+) -> Vec<f32> {
+    let (x, y, z) = start_point;
+    let point0 = [x, y, z];
+    let point1 = [x + width, y, z];
+    let point2 = [x, y + height, z];
+    let point3 = [x + width, y + height, z];
+    let point4 = [x, y, z - depth];
+    let point5 = [x + width, y, z - depth];
+    let point6 = [x, y + height, z - depth];
+    let point7 = [x + width, y + height, z - depth];
+    
+
+    let mut vertices: Vec<f32> = Vec::new();
+
+    vertices.extend_from_slice(&point0);
+    vertices.extend_from_slice(&point1);
+    vertices.extend_from_slice(&point2);
+
+    vertices.extend_from_slice(&point1);
+    vertices.extend_from_slice(&point3);
+    vertices.extend_from_slice(&point2);
+
+
+    vertices.extend_from_slice(&point1);
+    vertices.extend_from_slice(&point5);
+    vertices.extend_from_slice(&point3);
+
+    vertices.extend_from_slice(&point5);
+    vertices.extend_from_slice(&point7);
+    vertices.extend_from_slice(&point3);
+
+
+    vertices.extend_from_slice(&point5);
+    vertices.extend_from_slice(&point4);
+    vertices.extend_from_slice(&point7);
+
+    vertices.extend_from_slice(&point4);
+    vertices.extend_from_slice(&point6);
+    vertices.extend_from_slice(&point7);
+
+
+    vertices.extend_from_slice(&point4);
+    vertices.extend_from_slice(&point0);
+    vertices.extend_from_slice(&point6);
+
+    vertices.extend_from_slice(&point0);
+    vertices.extend_from_slice(&point2);
+    vertices.extend_from_slice(&point6);
+
+
+    vertices.extend_from_slice(&point6);
+    vertices.extend_from_slice(&point7);
+    vertices.extend_from_slice(&point2);
+
+    vertices.extend_from_slice(&point7);
+    vertices.extend_from_slice(&point3);
+    vertices.extend_from_slice(&point2);
+
+
+    vertices.extend_from_slice(&point4);
+    vertices.extend_from_slice(&point5);
+    vertices.extend_from_slice(&point0);
+
+    vertices.extend_from_slice(&point5);
+    vertices.extend_from_slice(&point1);
+    vertices.extend_from_slice(&point0);
+
+
+    vertices.extend_from_slice(&point2);
+    vertices.extend_from_slice(&point3);
+    vertices.extend_from_slice(&point6);
+
+    vertices.extend_from_slice(&point3);
+    vertices.extend_from_slice(&point7);
+    vertices.extend_from_slice(&point6);
+
+
+
+
+
+
+
+    vertices
+}
+
 
 
 
@@ -191,6 +334,9 @@ fn main() {
             gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
             gl::Enable(gl::DEBUG_OUTPUT_SYNCHRONOUS);
             gl::DebugMessageCallback(Some(util::debug_callback), ptr::null());
+            // Transparency stuff
+            // gl::Enable(gl::BLEND);
+            // gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
 
             // Print some diagnostics
             println!("{}: {}", util::get_gl_string(gl::VENDOR), util::get_gl_string(gl::RENDERER));
@@ -234,32 +380,51 @@ fn main() {
 
         // let vertices: Vec<f32> = vec![
         //     // Triangle 1 
-        //     -1.0, -1.0, 0.0,   // Bottom left
-        //     1.0, -1.0, 0.0,    // Bottom right
-        //     -1.0, 1.0, 0.0,    // Top left
+        //     -0.8,  0.5, 0.0,   // Top left
+        //     -0.5,  0.5, 0.0,   // Top right
+        //     -0.8,  1.0, 0.0,   // Bottom left
+        //     // -0.2, -0.4, -0.2,   // Bottom left 
+        //     // -0.3, -1.0, 0.0,    // Bottom right 
+        //     // 0.1, -0.5, 0.0,    // Top left 
 
-        //     // Triangle 2 
-        //     1.0, -1.0, 0.0,    // Bottom right
-        //     1.0, 1.0, 0.0,     // Top right
-        //     -1.0, 1.0, 0.0,    // Top left
+        //     // Triangle 2
+        //     -0.1, -0.4, -0.1,   // Bottom left 
+        //     -0.2, -1.0, -0.1,    // Bottom right 
+        //     0.1, -0.5, -0.1,    // Top left 
 
-        //     // // Triangle 3 
-        //     // -0.8, -0.8, 0.0,   // Bottom left
-        //     // -0.5, -1.0, 0.0,   // Bottom right
-        //     // -0.2, -0.5, 0.0,   // Top left
+        //     // Triangle 3 
+        //     -0.8, -0.8, -1.0,   // Bottom left
+        //     -0.5, -1.0, -1.0,   // Bottom right
+        //     -0.2, -0.5, -1.0,   // Top left
 
-        //     // // Triangle 4 
-        //     // 0.7, -0.7, 0.0,    // Bottom far right
-        //     // 0.7, -0.3, 0.0,    // Bottom right
-        //     // 0.4, -0.5, 0.0,    // Far bottom right
+        //     // Triangle 4 
+        //     0.7, -0.7, 0.0,    // Bottom far right
+        //     0.7, -0.3, 0.0,    // Bottom right
+        //     0.4, -0.5, 0.0,    // Far bottom right
 
-        //     // // Triangle 5 
-        //     // 0.0, 0.1, 0.0,     // Center
-        //     // 0.4, 0.1, 0.0,     // Right of center
-        //     // 0.2, 0.5, 0.0,     // Above center
+        //     // Triangle 5 
+        //     0.0, 0.1, 0.0,     // Center
+        //     0.4, 0.1, 0.0,     // Right of center
+        //     0.2, 0.5, 0.0,     // Above center
         // ];
-        // I commented out what i did in the first task, so that you can still see it, but i will use the createSquare function to create the vertices for the square for the remainder of the tasks
-        let vertices: Vec<f32> = createSquare(1.0 ,  -0.0, -0.0);
+        let  vertices: Vec<f32> = create_box((-0.5, -0.5, -0.5), 1.0, 1.0, 1.0);
+        // let mut vertices: Vec<f32> = vec![];
+
+        //let billboard_vertices: Vec<f32> = create_square(0.1, 0.0, 0.0, 0.0);
+        let mut billboard_vertices: Vec<f32> = vec![];
+        let point0 = [-1.0, -1.0, -2.0];
+        let point1 = [1.0, -1.0, -2.0];
+        let point2 = [-1.0, 1.0, -2.0];
+        let point3 = [1.0, 1.0, -2.0];
+
+        billboard_vertices.extend_from_slice(&point0);
+        billboard_vertices.extend_from_slice(&point1);
+        billboard_vertices.extend_from_slice(&point2);
+
+        billboard_vertices.extend_from_slice(&point1);
+        billboard_vertices.extend_from_slice(&point3);
+        billboard_vertices.extend_from_slice(&point2);
+
 
         let indices: Vec<u32> = vec![
             0, 1, 2,  // Triangle 1
@@ -267,10 +432,150 @@ fn main() {
             6, 7, 8,  // Triangle 3
             9, 10, 11, // Triangle 4
             12, 13, 14, // Triangle 5
+            15, 16, 17, // Triangle 6
+            18, 19, 20, // Triangle 7
+            21, 22, 23, // Triangle 8
+            24, 25, 26, // Triangle 9
+            27, 28, 29, // Triangle 10
+            30, 31, 32, // Triangle 11
+            33, 34, 35, // Triangle 12
+            36, 37, 38, // Triangle 13
+            39, 40, 41, // Triangle 14
+            42, 43, 44, // Triangle 15
+            45, 46, 47, // Triangle 16
+            48, 49, 50, // Triangle 17
+            51, 52, 53, // Triangle 18
+            54, 55, 56, // Triangle 19
+            57, 58, 59, // Triangle 20
+            60, 61, 62, // Triangle 21
+            63, 64, 65, // Triangle 22
+            66, 67, 68, // Triangle 23
+            69, 70, 71, // Triangle 24
+
+        ];
+
+        let colors: Vec<f32> = vec![
+            
+
+
+            // 0.0, 1.0, 0.0, 0.5, // Green
+            // 0.2, 0.8, 0.0, 0.5, // Yellowish Green
+            // 0.0, 0.6, 0.2, 0.5, // Blueish Green
+
+            // 1.0, 0.0, 0.0, 0.5, // Red
+            // 1.0, 0.3, 0.0, 0.5, // Orange
+            // 0.8, 0.0, 0.2, 0.5, // Reddish Purple
+            
+            // 0.0, 0.0, 1.0, 0.5, // Blue
+            // 0.2, 0.2, 1.0, 0.5, // Light Blue
+            // 0.0, 0.2, 0.8, 0.5, // Blueish Cyan
+
+            // 1.0, 1.0, 0.0, 1.0, // Yellow
+            // 1.0, 0.8, 0.2, 1.0, // Yellowish Orange
+            // 0.8, 1.0, 0.2, 1.0, // Greenish Yellow
+
+            // 0.0, 1.0, 1.0, 1.0, // Cyan
+            // 0.2, 0.8, 1.0, 1.0, // Light Blue Cyan
+            // 0.0, 1.0, 0.8, 1.0, // Greenish Cyan
+
+            1.0, 1.0, 0.0, 1.0, // Yellow 0
+            0.0, 1.0, 1.0, 1.0, // Cyan   1
+            1.0, 0.0, 0.0, 1.0, // Green  2
+            0.0, 1.0, 1.0, 1.0, // Cyan   1
+            0.0, 0.0, 1.0, 1.0, // Blue   3
+            1.0, 0.0, 0.0, 1.0, // Green  2
+
+            1.0, 1.0, 0.0, 1.0, // Yellow 0
+            0.0, 1.0, 1.0, 1.0, // Cyan   1
+            1.0, 0.0, 0.0, 1.0, // Green  2
+            0.0, 1.0, 1.0, 1.0, // Cyan   1
+            0.0, 0.0, 1.0, 1.0, // Blue   3
+            1.0, 0.0, 0.0, 1.0, // Green  2
+
+            1.0, 1.0, 0.0, 1.0, // Yellow 0
+            0.0, 1.0, 1.0, 1.0, // Cyan   1
+            1.0, 0.0, 0.0, 1.0, // Green  2
+            0.0, 1.0, 1.0, 1.0, // Cyan   1
+            0.0, 0.0, 1.0, 1.0, // Blue   3
+            1.0, 0.0, 0.0, 1.0, // Green  2
+
+            1.0, 1.0, 0.0, 1.0, // Yellow 0
+            0.0, 1.0, 1.0, 1.0, // Cyan   1
+            1.0, 0.0, 0.0, 1.0, // Green  2
+            0.0, 1.0, 1.0, 1.0, // Cyan   1
+            0.0, 0.0, 1.0, 1.0, // Blue   3
+            1.0, 0.0, 0.0, 1.0, // Green  2
+
+            1.0, 1.0, 0.0, 1.0, // Yellow 0
+            0.0, 1.0, 1.0, 1.0, // Cyan   1
+            1.0, 0.0, 0.0, 1.0, // Green  2
+            0.0, 1.0, 1.0, 1.0, // Cyan   1
+            0.0, 0.0, 1.0, 1.0, // Blue   3
+            1.0, 0.0, 0.0, 1.0, // Green  2
+
+            1.0, 1.0, 0.0, 1.0, // Yellow 0
+            0.0, 1.0, 1.0, 1.0, // Cyan   1
+            1.0, 0.0, 0.0, 1.0, // Green  2
+            0.0, 1.0, 1.0, 1.0, // Cyan   1
+            0.0, 0.0, 1.0, 1.0, // Blue   3
+            1.0, 0.0, 0.0, 1.0, // Green  2
+
+            1.0, 1.0, 0.0, 1.0, // Yellow 0
+            0.0, 1.0, 1.0, 1.0, // Cyan   1
+            1.0, 0.0, 0.0, 1.0, // Green  2
+            0.0, 1.0, 1.0, 1.0, // Cyan   1
+            0.0, 0.0, 1.0, 1.0, // Blue   3
+            1.0, 0.0, 0.0, 1.0, // Green  2
+
+            1.0, 1.0, 0.0, 1.0, // Yellow 0
+            0.0, 1.0, 1.0, 1.0, // Cyan   1
+            1.0, 0.0, 0.0, 1.0, // Green  2
+            0.0, 1.0, 1.0, 1.0, // Cyan   1
+            0.0, 0.0, 1.0, 1.0, // Blue   3
+            1.0, 0.0, 0.0, 1.0, // Green  2
+
+            
+
+
+            
+
+
+            
+            0.0, 1.0, 0.0, 1.0, // Green
+            0.0, 0.0, 1.0, 1.0, // Blue
+            1.0, 1.0, 0.0, 1.0, // Yellow
+            0.0, 1.0, 1.0, 1.0, // Cyan
+            1.0, 1.0, 0.0, 1.0, // Yellow
+            0.0, 1.0, 1.0, 1.0, // Cyan
+            1.0, 0.0, 0.0, 1.0, // Red
+            0.0, 1.0, 0.0, 1.0, // Green
+            0.0, 0.0, 1.0, 1.0, // Blue
+            1.0, 1.0, 0.0, 1.0, // Yellow
+            0.0, 1.0, 1.0, 1.0, // Cyan
+            1.0, 1.0, 0.0, 1.0, // Yellow
+            0.0, 1.0, 1.0, 1.0, // Cyan
+            1.0, 0.0, 0.0, 1.0, // Red
+            0.0, 1.0, 0.0, 1.0, // Green
+            0.0, 0.0, 1.0, 1.0, // Blue
+            1.0, 1.0, 0.0, 1.0, // Yellow
+            0.0, 1.0, 1.0, 1.0, // Cyan
+            1.0, 0.0, 0.0, 1.0, // Red
+            0.0, 1.0, 0.0, 1.0, // Green
+            0.0, 0.0, 1.0, 1.0, // Blue
+            1.0, 1.0, 0.0, 1.0, // Yellow
+            0.0, 1.0, 1.0, 1.0, // Cyan
+            1.0, 0.0, 0.0, 1.0, // Red
+            0.0, 1.0, 0.0, 1.0, // Green
+            0.0, 0.0, 1.0, 1.0, // Blue
+            1.0, 1.0, 0.0, 1.0, // Yellow
+            0.0, 1.0, 1.0, 1.0, // Cyan
+
+
+            
         ];
         // Create the VAO
         let vao = unsafe {
-            create_vao(&vertices, &indices)
+            create_vao(&vertices, &indices, &colors)
         };
 
         // Draw the VAO
@@ -283,6 +588,18 @@ fn main() {
                 std::ptr::null()
             );
         }
+        
+        // set up camera
+        //let mut camera_motion = CameraMotion::new();
+        
+        let mut camera_transformation_matrix: Mat4 = glm::identity();
+        let mut pitch: f32 = 0.0; // rotation around x-axis
+        let mut yaw:f32 = 0.0; // rotation around y-axis
+        let mut roll:f32  = 0.0; // rotation around z-axis
+
+        let mut camera_position = glm::vec3(0.0, 0.0, -5.0);
+        let mut camera_front: Vec<f32> = vec![0.0, 0.0, 0.0];
+
         
 
 
@@ -311,23 +628,49 @@ fn main() {
                 }
             }
 
+            let forward = Vec3::new(
+                camera_front[0].to_radians().cos() * pitch.to_radians().cos(),
+                camera_front[1].to_radians().sin(),
+                camera_front[2].to_radians().sin() * pitch.to_radians().cos()
+            ).normalize();
+
+            let speed: f32 = 5.0 * delta_time;  
+            let rotation_speed: f32 = 1.0 * delta_time;  
+
+            
+            
+
             // Handle keyboard input
             if let Ok(keys) = pressed_keys.lock() {
                 for key in keys.iter() {
+                    // if key is pressed, move the camera
+
+
+
                     match key {
+                        VirtualKeyCode::W => camera_position.z += speed,  // Move forward
+                        VirtualKeyCode::S => camera_position.z -= speed,  // Move backward
+                        VirtualKeyCode::A => camera_position.x += speed,  // Move left
+                        VirtualKeyCode::D => camera_position.x -= speed,  // Move right
+                        VirtualKeyCode::Space => camera_position.y -= speed,  // Move up
+                        VirtualKeyCode::LShift => camera_position.y += speed,  // Move down
+                        
+                        // Rotation
+                        VirtualKeyCode::Up => camera_front[0] -= rotation_speed,  // Rotate up (around X-axis)
+                        VirtualKeyCode::Down => camera_front[0] += rotation_speed,  // Rotate down (around X-axis)
+                        VirtualKeyCode::Left => camera_front[1] += rotation_speed,  // Rotate left (around Y-axis)
+                        VirtualKeyCode::Right => camera_front[1] -= rotation_speed,  // Rotate right (around Y-axis)
                         // The `VirtualKeyCode` enum is defined here:
                         //    https://docs.rs/winit/0.25.0/winit/event/enum.VirtualKeyCode.html
 
-                        VirtualKeyCode::A => {
-                            _arbitrary_number += delta_time;
-                        }
-                        VirtualKeyCode::D => {
-                            _arbitrary_number -= delta_time;
-                        }
+                        // VirtualKeyCode::A => {
+                        //     _arbitrary_number += delta_time;
+                        // }
+                        // VirtualKeyCode::D => {
+                        //     _arbitrary_number -= delta_time;
+                        // }
 
-
-                        // default handler:
-                        _ => { }
+_ => { }
                     }
                 }
             }
@@ -340,13 +683,45 @@ fn main() {
                 *delta = (0.0, 0.0); // reset when done
             }
 
+                        // default handler:
+                        
             // == // Please compute camera transforms here (exercise 2 & 3)
 
+
+            // Compute the projection matrix
+            let aspect = window_aspect_ratio;
+            let fovy = 45.0; // FOV (field of view) in degrees
+            let near = 1.0; // near plane
+            let far = 100.0; // far plane
+
+            let perspective_projection: glm::Mat4 = glm::perspective(    
+                aspect, 
+                fovy, 
+                near, 
+                far
+            );
+
+            
+
+            // Compute the view matrix
+            let translation = Mat4::new_translation(&camera_position);
+            let rotation_x = glm::rotation(camera_front[0], &glm::vec3(1.0, 0.0, 0.0));
+            let rotation_y = glm::rotation(camera_front[1], &glm::vec3(0.0, 1.0, 0.0));
+            camera_transformation_matrix = translation * rotation_x * rotation_y;
+            
+            let mut identity_matrix: glm::Mat4 = glm::identity();  
+            let mut mixed_matrix = perspective_projection * camera_transformation_matrix * identity_matrix;
 
             unsafe {
                 // Clear the color and depth buffers
                 gl::ClearColor(0.035, 0.046, 0.078, 1.0); // night sky
                 gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+
+
+                //transformation_matrix = glm::translate(&transformation_matrix, &glm::vec3(f32::sin(elapsed*0.5), f32::sin(elapsed*0.5), 0.0));
+                // Pass the 'transformation_matrix' to the 'transformation_matrix' uniform in the shader
+                let transformation_matrix_location: i32 = gl::GetUniformLocation(shader_program.program_id, "transformation_matrix\0".as_ptr() as *const i8);
+                gl::UniformMatrix4fv(transformation_matrix_location, 1, gl::FALSE, mixed_matrix.as_ptr());
 
                 // Pass the 'elapsed_time' to the 'time' uniform in the shader
                 let time_uniform_location = gl::GetUniformLocation(shader_program.program_id, "time".as_ptr() as *const i8);
