@@ -18,10 +18,13 @@ use std::time::Instant;
 mod shader;
 mod util;
 
+mod mesh;
+
 use glm::{normalize_dot, Mat4, Vec3};
 use glutin::event::ElementState;
 use glutin::event::{Event, WindowEvent, DeviceEvent, KeyboardInput, ElementState::{Pressed, Released}, VirtualKeyCode::{self, *}};
 use glutin::event_loop::ControlFlow;
+use mesh::{Mesh};
 
 
 
@@ -76,8 +79,10 @@ fn offset<T>(n: u32) -> *const c_void {
 // ptr::null()
 
 
+
+
 // == // Generate your VAO here
-unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f32>) -> u32 {
+unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f32>, normals: &Vec<f32>) -> u32 {
     
 
     // Also, feel free to delete comments :)
@@ -158,11 +163,35 @@ unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f32>)
         4 * std::mem::size_of::<f32>() as i32, // stride: 4 floats per color
         ptr::null(),
     );
+
+    gl::EnableVertexAttribArray(1);
+
+    // Generate the VBO for the normals
+    let mut normal_vbo: u32 = 0;
+    gl::GenBuffers(1, &mut normal_vbo);
+    gl::BindBuffer(gl::ARRAY_BUFFER, normal_vbo);
+    gl::BufferData(
+        gl::ARRAY_BUFFER,
+        (normals.len() * std::mem::size_of::<f32>()) as isize,
+        normals.as_ptr() as *const c_void,
+        gl::STATIC_DRAW,
+    );
+
+    gl::VertexAttribPointer(
+        2,
+        3,                  // x,y,z components per normal
+        gl::FLOAT,
+        gl::FALSE,
+        3 * std::mem::size_of::<f32>() as i32, // stride: 3 floats per normal
+        ptr::null(),
+    );
+
+    gl::EnableVertexAttribArray(2);
     
 
     // Enable the VAP
     
-    gl::EnableVertexAttribArray(1);
+    
 
 
     vao
@@ -370,212 +399,25 @@ fn main() {
             shader_program.activate();
         }
 
-        /*
-        let simple_shader = unsafe {
-            shader::ShaderBuilder::new()
-                .attach_file("./path/to/simple/shader.file")
-                .link()
-        };
-        */
-
-        // let vertices: Vec<f32> = vec![
-        //     // Triangle 1 
-        //     -0.8,  0.5, 0.0,   // Top left
-        //     -0.5,  0.5, 0.0,   // Top right
-        //     -0.8,  1.0, 0.0,   // Bottom left
-        //     // -0.2, -0.4, -0.2,   // Bottom left 
-        //     // -0.3, -1.0, 0.0,    // Bottom right 
-        //     // 0.1, -0.5, 0.0,    // Top left 
-
-        //     // Triangle 2
-        //     -0.1, -0.4, -0.1,   // Bottom left 
-        //     -0.2, -1.0, -0.1,    // Bottom right 
-        //     0.1, -0.5, -0.1,    // Top left 
-
-        //     // Triangle 3 
-        //     -0.8, -0.8, -1.0,   // Bottom left
-        //     -0.5, -1.0, -1.0,   // Bottom right
-        //     -0.2, -0.5, -1.0,   // Top left
-
-        //     // Triangle 4 
-        //     0.7, -0.7, 0.0,    // Bottom far right
-        //     0.7, -0.3, 0.0,    // Bottom right
-        //     0.4, -0.5, 0.0,    // Far bottom right
-
-        //     // Triangle 5 
-        //     0.0, 0.1, 0.0,     // Center
-        //     0.4, 0.1, 0.0,     // Right of center
-        //     0.2, 0.5, 0.0,     // Above center
-        // ];
-        let  vertices: Vec<f32> = create_box((-0.5, -0.5, -0.5), 1.0, 1.0, 1.0);
+        
+        //let  vertices: Vec<f32> = create_box((-0.5, -0.5, -0.5), 1.0, 1.0, 1.0);
         // let mut vertices: Vec<f32> = vec![];
 
-        //let billboard_vertices: Vec<f32> = create_square(0.1, 0.0, 0.0, 0.0);
-        let mut billboard_vertices: Vec<f32> = vec![];
-        let point0 = [-1.0, -1.0, -2.0];
-        let point1 = [1.0, -1.0, -2.0];
-        let point2 = [-1.0, 1.0, -2.0];
-        let point3 = [1.0, 1.0, -2.0];
+        //let indices: Vec<u32> = vec![];
 
-        billboard_vertices.extend_from_slice(&point0);
-        billboard_vertices.extend_from_slice(&point1);
-        billboard_vertices.extend_from_slice(&point2);
+        //let colors: Vec<f32> = vec![];
 
-        billboard_vertices.extend_from_slice(&point1);
-        billboard_vertices.extend_from_slice(&point3);
-        billboard_vertices.extend_from_slice(&point2);
+        // load the terrain
+        let terrain: Mesh = mesh::Terrain::load("./resources/lunarsurface.obj");
+        let vertices: Vec<f32> = terrain.vertices;
+        let indices: Vec<u32> = terrain.indices;
+        let colors: Vec<f32> = terrain.colors;
+        let normals: Vec<f32> = terrain.normals;
 
-
-        let indices: Vec<u32> = vec![
-            0, 1, 2,  // Triangle 1
-            3, 4, 5,  // Triangle 2
-            6, 7, 8,  // Triangle 3
-            9, 10, 11, // Triangle 4
-            12, 13, 14, // Triangle 5
-            15, 16, 17, // Triangle 6
-            18, 19, 20, // Triangle 7
-            21, 22, 23, // Triangle 8
-            24, 25, 26, // Triangle 9
-            27, 28, 29, // Triangle 10
-            30, 31, 32, // Triangle 11
-            33, 34, 35, // Triangle 12
-            36, 37, 38, // Triangle 13
-            39, 40, 41, // Triangle 14
-            42, 43, 44, // Triangle 15
-            45, 46, 47, // Triangle 16
-            48, 49, 50, // Triangle 17
-            51, 52, 53, // Triangle 18
-            54, 55, 56, // Triangle 19
-            57, 58, 59, // Triangle 20
-            60, 61, 62, // Triangle 21
-            63, 64, 65, // Triangle 22
-            66, 67, 68, // Triangle 23
-            69, 70, 71, // Triangle 24
-
-        ];
-
-        let colors: Vec<f32> = vec![
-            
-
-
-            // 0.0, 1.0, 0.0, 0.5, // Green
-            // 0.2, 0.8, 0.0, 0.5, // Yellowish Green
-            // 0.0, 0.6, 0.2, 0.5, // Blueish Green
-
-            // 1.0, 0.0, 0.0, 0.5, // Red
-            // 1.0, 0.3, 0.0, 0.5, // Orange
-            // 0.8, 0.0, 0.2, 0.5, // Reddish Purple
-            
-            // 0.0, 0.0, 1.0, 0.5, // Blue
-            // 0.2, 0.2, 1.0, 0.5, // Light Blue
-            // 0.0, 0.2, 0.8, 0.5, // Blueish Cyan
-
-            // 1.0, 1.0, 0.0, 1.0, // Yellow
-            // 1.0, 0.8, 0.2, 1.0, // Yellowish Orange
-            // 0.8, 1.0, 0.2, 1.0, // Greenish Yellow
-
-            // 0.0, 1.0, 1.0, 1.0, // Cyan
-            // 0.2, 0.8, 1.0, 1.0, // Light Blue Cyan
-            // 0.0, 1.0, 0.8, 1.0, // Greenish Cyan
-
-            1.0, 1.0, 0.0, 1.0, // Yellow 0
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            1.0, 0.0, 0.0, 1.0, // Green  2
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            0.0, 0.0, 1.0, 1.0, // Blue   3
-            1.0, 0.0, 0.0, 1.0, // Green  2
-
-            1.0, 1.0, 0.0, 1.0, // Yellow 0
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            1.0, 0.0, 0.0, 1.0, // Green  2
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            0.0, 0.0, 1.0, 1.0, // Blue   3
-            1.0, 0.0, 0.0, 1.0, // Green  2
-
-            1.0, 1.0, 0.0, 1.0, // Yellow 0
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            1.0, 0.0, 0.0, 1.0, // Green  2
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            0.0, 0.0, 1.0, 1.0, // Blue   3
-            1.0, 0.0, 0.0, 1.0, // Green  2
-
-            1.0, 1.0, 0.0, 1.0, // Yellow 0
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            1.0, 0.0, 0.0, 1.0, // Green  2
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            0.0, 0.0, 1.0, 1.0, // Blue   3
-            1.0, 0.0, 0.0, 1.0, // Green  2
-
-            1.0, 1.0, 0.0, 1.0, // Yellow 0
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            1.0, 0.0, 0.0, 1.0, // Green  2
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            0.0, 0.0, 1.0, 1.0, // Blue   3
-            1.0, 0.0, 0.0, 1.0, // Green  2
-
-            1.0, 1.0, 0.0, 1.0, // Yellow 0
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            1.0, 0.0, 0.0, 1.0, // Green  2
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            0.0, 0.0, 1.0, 1.0, // Blue   3
-            1.0, 0.0, 0.0, 1.0, // Green  2
-
-            1.0, 1.0, 0.0, 1.0, // Yellow 0
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            1.0, 0.0, 0.0, 1.0, // Green  2
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            0.0, 0.0, 1.0, 1.0, // Blue   3
-            1.0, 0.0, 0.0, 1.0, // Green  2
-
-            1.0, 1.0, 0.0, 1.0, // Yellow 0
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            1.0, 0.0, 0.0, 1.0, // Green  2
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            0.0, 0.0, 1.0, 1.0, // Blue   3
-            1.0, 0.0, 0.0, 1.0, // Green  2
-
-            
-
-
-            
-
-
-            
-            0.0, 1.0, 0.0, 1.0, // Green
-            0.0, 0.0, 1.0, 1.0, // Blue
-            1.0, 1.0, 0.0, 1.0, // Yellow
-            0.0, 1.0, 1.0, 1.0, // Cyan
-            1.0, 1.0, 0.0, 1.0, // Yellow
-            0.0, 1.0, 1.0, 1.0, // Cyan
-            1.0, 0.0, 0.0, 1.0, // Red
-            0.0, 1.0, 0.0, 1.0, // Green
-            0.0, 0.0, 1.0, 1.0, // Blue
-            1.0, 1.0, 0.0, 1.0, // Yellow
-            0.0, 1.0, 1.0, 1.0, // Cyan
-            1.0, 1.0, 0.0, 1.0, // Yellow
-            0.0, 1.0, 1.0, 1.0, // Cyan
-            1.0, 0.0, 0.0, 1.0, // Red
-            0.0, 1.0, 0.0, 1.0, // Green
-            0.0, 0.0, 1.0, 1.0, // Blue
-            1.0, 1.0, 0.0, 1.0, // Yellow
-            0.0, 1.0, 1.0, 1.0, // Cyan
-            1.0, 0.0, 0.0, 1.0, // Red
-            0.0, 1.0, 0.0, 1.0, // Green
-            0.0, 0.0, 1.0, 1.0, // Blue
-            1.0, 1.0, 0.0, 1.0, // Yellow
-            0.0, 1.0, 1.0, 1.0, // Cyan
-            1.0, 0.0, 0.0, 1.0, // Red
-            0.0, 1.0, 0.0, 1.0, // Green
-            0.0, 0.0, 1.0, 1.0, // Blue
-            1.0, 1.0, 0.0, 1.0, // Yellow
-            0.0, 1.0, 1.0, 1.0, // Cyan
-
-
-            
-        ];
+        
         // Create the VAO
         let vao = unsafe {
-            create_vao(&vertices, &indices, &colors)
+            create_vao(&vertices, &indices, &colors, &normals)
         };
 
         // Draw the VAO
@@ -590,15 +432,14 @@ fn main() {
         }
         
         // set up camera
-        //let mut camera_motion = CameraMotion::new();
-        
-        let mut camera_transformation_matrix: Mat4 = glm::identity();
+
         let mut pitch: f32 = 0.0; // rotation around x-axis
-        let mut yaw:f32 = 0.0; // rotation around y-axis
+        let mut yaw: f32 = -90.0_f32.to_radians(); // rotation around y-axis
         let mut roll:f32  = 0.0; // rotation around z-axis
 
-        let mut camera_position = glm::vec3(0.0, 0.0, -5.0);
-        let mut camera_front: Vec<f32> = vec![0.0, 0.0, 0.0];
+        let mut camera_position:Vec3 = glm::vec3(0.0, 0.0, 0.0);
+        let mut camera_front: Vec3 = glm::vec3(0.0, 0.0, -1.0);
+        let camera_up = glm::vec3(0.0, 1.0, 0.0);
 
         
 
@@ -628,16 +469,9 @@ fn main() {
                 }
             }
 
-            let forward = Vec3::new(
-                camera_front[0].to_radians().cos() * pitch.to_radians().cos(),
-                camera_front[1].to_radians().sin(),
-                camera_front[2].to_radians().sin() * pitch.to_radians().cos()
-            ).normalize();
 
-            let speed: f32 = 5.0 * delta_time;  
+            let speed: f32 = 50.0 * delta_time;  
             let rotation_speed: f32 = 1.0 * delta_time;  
-
-            
             
 
             // Handle keyboard input
@@ -648,18 +482,18 @@ fn main() {
 
 
                     match key {
-                        VirtualKeyCode::W => camera_position.z += speed,  // Move forward
-                        VirtualKeyCode::S => camera_position.z -= speed,  // Move backward
-                        VirtualKeyCode::A => camera_position.x += speed,  // Move left
-                        VirtualKeyCode::D => camera_position.x -= speed,  // Move right
-                        VirtualKeyCode::Space => camera_position.y -= speed,  // Move up
-                        VirtualKeyCode::LShift => camera_position.y += speed,  // Move down
+                        VirtualKeyCode::W => camera_position += speed * camera_front,  // Move forward
+                        VirtualKeyCode::S => camera_position -= speed * camera_front,  // Move backward
+                        VirtualKeyCode::A => camera_position -= glm::normalize(&glm::cross(&camera_front, &camera_up)) * speed,   // Move left
+                        VirtualKeyCode::D => camera_position += glm::normalize(&glm::cross(&camera_front, &camera_up)) * speed,  // Move right
+                        VirtualKeyCode::Space => camera_position[1] += speed,  // Move up
+                        VirtualKeyCode::LShift => camera_position[1] -= speed,  // Move down
                         
                         // Rotation
-                        VirtualKeyCode::Up => camera_front[0] -= rotation_speed,  // Rotate up (around X-axis)
-                        VirtualKeyCode::Down => camera_front[0] += rotation_speed,  // Rotate down (around X-axis)
-                        VirtualKeyCode::Left => camera_front[1] += rotation_speed,  // Rotate left (around Y-axis)
-                        VirtualKeyCode::Right => camera_front[1] -= rotation_speed,  // Rotate right (around Y-axis)
+                        VirtualKeyCode::Up => pitch += rotation_speed,  // Rotate up (around X-axis)
+                        VirtualKeyCode::Down => pitch -= rotation_speed,  // Rotate down (around X-axis)
+                        VirtualKeyCode::Left => yaw -= rotation_speed,  // Rotate left (around Y-axis)
+                        VirtualKeyCode::Right => yaw += rotation_speed,  // Rotate right (around Y-axis)
                         // The `VirtualKeyCode` enum is defined here:
                         //    https://docs.rs/winit/0.25.0/winit/event/enum.VirtualKeyCode.html
 
@@ -671,6 +505,14 @@ fn main() {
                         // }
 
 _ => { }
+                    
+                }
+                // Clamp the pitch value to prevent camera flip
+                if pitch > 89.0_f32.to_radians() {
+                    pitch = 89.0_f32.to_radians();
+                }
+                if pitch < -89.0_f32.to_radians() {
+                    pitch = -89.0_f32.to_radians();
                     }
                 }
             }
@@ -686,13 +528,25 @@ _ => { }
                         // default handler:
                         
             // == // Please compute camera transforms here (exercise 2 & 3)
+            let front = glm::vec3(
+                yaw.cos() * pitch.cos(),
+                pitch.sin(),
+                yaw.sin() * pitch.cos()
+            );
+            camera_front = glm::normalize(&front);
 
+            // Compute the view matrix
+            let view = glm::look_at(
+                &camera_position,
+                &(camera_position + camera_front),
+                &camera_up
+            );
 
             // Compute the projection matrix
             let aspect = window_aspect_ratio;
             let fovy = 45.0; // FOV (field of view) in degrees
             let near = 1.0; // near plane
-            let far = 100.0; // far plane
+            let far = 1000.0; // far plane
 
             let perspective_projection: glm::Mat4 = glm::perspective(    
                 aspect, 
@@ -704,13 +558,13 @@ _ => { }
             
 
             // Compute the view matrix
-            let translation = Mat4::new_translation(&camera_position);
-            let rotation_x = glm::rotation(camera_front[0], &glm::vec3(1.0, 0.0, 0.0));
-            let rotation_y = glm::rotation(camera_front[1], &glm::vec3(0.0, 1.0, 0.0));
-            camera_transformation_matrix = translation * rotation_x * rotation_y;
+            // let translation = glm::translation(&glm::vec3(camera_position[0], camera_position[1], camera_position[2]));
+            // let rotation_x = glm::rotation(camera_front[0], &glm::vec3(1.0, 0.0, 0.0));
+            // let rotation_y = glm::rotation(camera_front[1], &glm::vec3(0.0, 1.0, 0.0));
+            // let camera_transformation_matrix = translation * rotation_x * rotation_y;
             
-            let mut identity_matrix: glm::Mat4 = glm::identity();  
-            let mut mixed_matrix = perspective_projection * camera_transformation_matrix * identity_matrix;
+            let identity_matrix: glm::Mat4 = glm::identity();  
+            let mut mixed_matrix = perspective_projection * view * identity_matrix;
 
             unsafe {
                 // Clear the color and depth buffers
