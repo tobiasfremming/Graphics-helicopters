@@ -24,7 +24,7 @@ use glm::{normalize_dot, Mat4, Vec3};
 use glutin::event::ElementState;
 use glutin::event::{Event, WindowEvent, DeviceEvent, KeyboardInput, ElementState::{Pressed, Released}, VirtualKeyCode::{self, *}};
 use glutin::event_loop::ControlFlow;
-use mesh::{Mesh};
+use mesh::{Helicopter, Mesh};
 
 
 
@@ -410,26 +410,103 @@ fn main() {
         // load the terrain
         let terrain: Mesh = mesh::Terrain::load("./resources/lunarsurface.obj");
         let vertices: Vec<f32> = terrain.vertices;
-        let indices: Vec<u32> = terrain.indices;
+        let terrain_indices: Vec<u32> = terrain.indices;
         let colors: Vec<f32> = terrain.colors;
         let normals: Vec<f32> = terrain.normals;
 
-        
         // Create the VAO
-        let vao = unsafe {
-            create_vao(&vertices, &indices, &colors, &normals)
+        let terrain_vao: u32 = unsafe {
+            create_vao(&vertices, &terrain_indices, &colors, &normals)
         };
 
+        // load the helicopter
+        let helicopter: Helicopter = mesh::Helicopter::load("./resources/helicopter.obj");
+        let body: Mesh = helicopter.body;
+        let vertices: Vec<f32> = body.vertices;
+        let body_indices: Vec<u32> = body.indices;
+        let colors: Vec<f32> = body.colors;
+        let normals: Vec<f32> = body.normals;
+
+        let helicopter_body_Vao: u32 = unsafe {
+            create_vao(&vertices, &body_indices, &colors, &normals)
+        };
+
+        let door: Mesh = helicopter.door;
+        let vertices: Vec<f32> = door.vertices;
+        let door_indices: Vec<u32> = door.indices;
+        let colors: Vec<f32> = door.colors;
+        let normals: Vec<f32> = door.normals;
+
+        let helicopter_door_Vao: u32 = unsafe {
+            create_vao(&vertices, &door_indices, &colors, &normals)
+        };
+
+        let main_rotor: Mesh = helicopter.main_rotor;
+        let vertices: Vec<f32> = main_rotor.vertices;
+        let main_rotor_indices: Vec<u32> = main_rotor.indices;
+        let colors: Vec<f32> = main_rotor.colors;
+        let normals: Vec<f32> = main_rotor.normals;
+
+        let helicopter_main_rotor_Vao: u32 = unsafe {
+            create_vao(&vertices, &main_rotor_indices, &colors, &normals)
+        };
+
+        let tail_rotor: Mesh = helicopter.tail_rotor;
+        let vertices: Vec<f32> = tail_rotor.vertices;
+        let tail_rotor_indices: Vec<u32> = tail_rotor.indices;
+        let colors: Vec<f32> = tail_rotor.colors;
+        let normals: Vec<f32> = tail_rotor.normals;
+
+        let helicopter_tail_rotor_Vao: u32 = unsafe {
+            create_vao(&vertices, &tail_rotor_indices, &colors, &normals)
+        };
+        
+        
+
         // Draw the VAO
-        unsafe {
-            gl::BindVertexArray(vao);
-            gl::DrawElements(
-                gl::TRIANGLES,
-                indices.len() as i32,
-                gl::UNSIGNED_INT,
-                std::ptr::null()
-            );
-        }
+        //TODO: Make into for loop
+        // unsafe {
+        //     gl::BindVertexArray(terrain_vao);
+            
+        //     gl::DrawElements(
+        //         gl::TRIANGLES,
+        //         indices.len() as i32,
+        //         gl::UNSIGNED_INT,
+        //         std::ptr::null()
+        //     );
+
+        //     gl::BindVertexArray(helicopter_body_Vao);
+        //     gl::DrawElements(
+        //         gl::TRIANGLES,
+        //         indices.len() as i32,
+        //         gl::UNSIGNED_INT,
+        //         std::ptr::null()
+        //     );
+
+        //     gl::BindVertexArray(helicopter_door_Vao);
+        //     gl::DrawElements(
+        //         gl::TRIANGLES,
+        //         indices.len() as i32,
+        //         gl::UNSIGNED_INT,
+        //         std::ptr::null()
+        //     );
+
+        //     gl::BindVertexArray(helicopter_main_rotor_Vao);
+        //     gl::DrawElements(
+        //         gl::TRIANGLES,
+        //         indices.len() as i32,
+        //         gl::UNSIGNED_INT,
+        //         std::ptr::null()
+        //     );
+
+        //     gl::BindVertexArray(helicopter_tail_rotor_Vao);
+        //     gl::DrawElements(
+        //         gl::TRIANGLES,
+        //         indices.len() as i32,
+        //         gl::UNSIGNED_INT,
+        //         std::ptr::null()
+        //     );
+        // }
         
         // set up camera
 
@@ -586,21 +663,51 @@ _ => { }
                 
 
                 // Bind the VAO
-                gl::BindVertexArray(vao);
+                
 
-                // Draw the elements
+                gl::BindVertexArray(helicopter_body_Vao);
                 gl::DrawElements(
                     gl::TRIANGLES,
-                    indices.len() as i32,
+                    body_indices.len() as i32,
                     gl::UNSIGNED_INT,
                     std::ptr::null()
                 );
 
-    // Unbind the VAO (optional, good practice to prevent accidental modifications)
-    gl::BindVertexArray(0);
+                gl::BindVertexArray(helicopter_door_Vao);
+                gl::DrawElements(
+                    gl::TRIANGLES,
+                    door_indices.len() as i32,
+                    gl::UNSIGNED_INT,
+                    std::ptr::null()
+                );
+
+                gl::BindVertexArray(helicopter_main_rotor_Vao);
+                gl::DrawElements(
+                    gl::TRIANGLES,
+                    main_rotor_indices.len() as i32,
+                    gl::UNSIGNED_INT,
+                    std::ptr::null()
+                );
+
+                gl::BindVertexArray(helicopter_tail_rotor_Vao);
+                gl::DrawElements(
+                    gl::TRIANGLES,
+                    tail_rotor_indices.len() as i32,
+                    gl::UNSIGNED_INT,
+                    std::ptr::null()
+                );
+
+                gl::BindVertexArray(terrain_vao);
                 
+                gl::DrawElements(
+                    gl::TRIANGLES,
+                    terrain_indices.len() as i32,
+                    gl::UNSIGNED_INT,
+                    std::ptr::null()
+                );
 
-
+                // Unbind the VAO (optional, good practice to prevent accidental modifications)
+                gl::BindVertexArray(0);
 
             }
 
