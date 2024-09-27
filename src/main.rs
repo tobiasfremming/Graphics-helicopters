@@ -336,19 +336,20 @@ unsafe fn draw_scene(node: &scene_graph::SceneNode,
         // Compute the transformation matrix for the current node
         let mut transformation_matrix = glm::identity();
 
+        //transformation_matrix = glm::translate(&transformation_matrix, &-node.reference_point);
+        println!("node.position: {:?}", node.position);
+        println!("node.reference_point: {:?}", node.reference_point);
         transformation_matrix = glm::translate(&transformation_matrix, &node.position);
-        transformation_matrix = glm::translate(&transformation_matrix, &node.reference_point);
-
-        // Scale
-        transformation_matrix = glm::scale(&transformation_matrix, &node.scale);
         // Rotate
         transformation_matrix = glm::rotate(&transformation_matrix, node.rotation[0], &glm::vec3(1.0, 0.0, 0.0));
         transformation_matrix = glm::rotate(&transformation_matrix, node.rotation[1], &glm::vec3(0.0, 1.0, 0.0));
         transformation_matrix = glm::rotate(&transformation_matrix, node.rotation[2], &glm::vec3(0.0, 0.0, 1.0));
+    
+        transformation_matrix = glm::translate(&transformation_matrix, &-node.position);
         
-        
-        transformation_matrix = glm::translate(&transformation_matrix, &-node.reference_point);
-
+        //transformation_matrix = glm::translate(&transformation_matrix, &-node.reference_point);
+        // Scale
+        //transformation_matrix = glm::scale(&transformation_matrix, &node.scale);
         // Combine the transformation matrix with the transformation so far
         let transformation_so_far = transformation_matrix * transformation_so_far;
         let mixed_matrix =  view_projection_matrix * transformation_so_far;
