@@ -11,20 +11,21 @@ uniform mat4 view_projection_matrix;
 
 out layout(location = 0) vec4 fragColor;
 out layout(location = 1) vec2 fragCoord;
-out layout(location = 2) vec3 fragNormal;
+out layout(location = 2) vec4 fragNormal;
 
 
 
 
 void main()
 {
-    //gl_Position = transformation_so_far * vec4(position, 1.0f);
+    //fragNormal = transformation_so_far * vec4(position, 1.0f);
     gl_Position = view_projection_matrix * vec4(position, 1.0f);
-
     
     fragColor = vertexColor;
     fragCoord = position.xy;
-    fragNormal = normal;
+    //fragNormal = normal;
+    fragNormal = transformation_so_far * vec4(normal, 0.0);
+
     // fragNormal = model_transformation_matrix * vec4(normal, 1.0f);
     
 
