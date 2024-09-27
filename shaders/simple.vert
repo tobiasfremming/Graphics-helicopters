@@ -18,7 +18,7 @@ out layout(location = 2) vec3 fragNormal;
 
 void main()
 {
-    // gl_Position = model_transformation_matrix * vec4(position, 1.0f);
+    //gl_Position = transformation_so_far * vec4(position, 1.0f);
     gl_Position = view_projection_matrix * vec4(position, 1.0f);
 
     
