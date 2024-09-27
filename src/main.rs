@@ -17,14 +17,15 @@ use std::time::Instant;
 
 mod shader;
 mod util;
-
 mod mesh;
+mod scene_graph;
 
 use glm::{normalize_dot, Mat4, Vec3};
 use glutin::event::ElementState;
 use glutin::event::{Event, WindowEvent, DeviceEvent, KeyboardInput, ElementState::{Pressed, Released}, VirtualKeyCode::{self, *}};
 use glutin::event_loop::ControlFlow;
 use mesh::{Helicopter, Mesh};
+use scene_graph::{Node, SceneNode};
 
 
 
@@ -43,7 +44,7 @@ use mesh::{Helicopter, Mesh};
 //     }
 // }
 
-
+static mut is_helicopter: bool = false;
 
 // initial window size
 const INITIAL_SCREEN_W: u32 = 800;
@@ -305,6 +306,65 @@ fn create_box(
     vertices
 }
 
+// never mind this just now
+fn draw_object(mesh: &Mesh, vao: u32, indices_lenght: i32) {
+    unsafe {
+        gl::BindVertexArray(vao);
+        gl::Uniform1i(2, mesh.is_helicopter as i32);
+        gl::DrawElements(
+            gl::TRIANGLES,
+            indices_lenght as i32,
+            gl::UNSIGNED_INT,
+            std::ptr::null()
+        );
+    }
+
+
+}
+
+
+unsafe fn draw_scene(node: &scene_graph::SceneNode,
+    view_projection_matrix: &glm::Mat4,
+    transformation_so_far: &glm::Mat4, shader_program_id: u32) {
+    // Perform any logic needed before drawing the node
+    // Check if node is drawable, if so: set uniforms, bind VAO and draw VAO
+
+    // The node should be drawable if it has a VAO ID not equal to 0
+    if node.index_count != -1 {
+        
+        // Compute the transformation matrix for the current node
+        
+
+
+        // Pass the transformation matrix to the shader
+        let transformation_so_far_location = gl::GetUniformLocation(shader_program_id, "transformation_so_far\0".as_ptr() as *const i8);
+        gl::UniformMatrix4fv(transformation_so_far_location, 1, gl::FALSE, transformation_so_far.as_ptr());
+
+        // Pass the view-projection matrix to the shader
+        let view_projection_matrix_location = gl::GetUniformLocation(shader_program_id, "view_projection_matrix\0".as_ptr() as *const i8);
+        gl::UniformMatrix4fv(view_projection_matrix_location, 1, gl::FALSE, view_projection_matrix.as_ptr());
+
+        // Bind the VAO
+        gl::BindVertexArray(node.vao_id);
+
+        //gl::Uniform1i(2, node.vao_id.mesh.is_helicopter as i32);
+
+
+        // Draw the VAO
+        gl::DrawElements(
+            gl::TRIANGLES,
+            node.index_count,
+            gl::UNSIGNED_INT,
+            std::ptr::null()
+        );
+
+    }
+
+    // Recurse
+    for &child in &node.children {
+    draw_scene(&*child, view_projection_matrix, transformation_so_far, shader_program_id);
+    }
+    }
 
 
 
@@ -421,94 +481,88 @@ fn main() {
 
         // load the helicopter
         let helicopter: Helicopter = mesh::Helicopter::load("./resources/helicopter.obj");
-        let body: Mesh = helicopter.body;
+        let mut body: Mesh = helicopter.body;
+        body.is_helicopter = true;
         let vertices: Vec<f32> = body.vertices;
         let body_indices: Vec<u32> = body.indices;
         let colors: Vec<f32> = body.colors;
         let normals: Vec<f32> = body.normals;
+        
 
         let helicopter_body_Vao: u32 = unsafe {
             create_vao(&vertices, &body_indices, &colors, &normals)
         };
 
-        let door: Mesh = helicopter.door;
-        let vertices: Vec<f32> = door.vertices;
-        let door_indices: Vec<u32> = door.indices;
-        let colors: Vec<f32> = door.colors;
-        let normals: Vec<f32> = door.normals;
+        let mut helicopter_door: Mesh = helicopter.door;
+        helicopter_door.is_helicopter = true;
+        let vertices: Vec<f32> = helicopter_door.vertices;
+        let door_indices: Vec<u32> = helicopter_door.indices;
+        let colors: Vec<f32> = helicopter_door.colors;
+        let normals: Vec<f32> = helicopter_door.normals;
 
         let helicopter_door_Vao: u32 = unsafe {
             create_vao(&vertices, &door_indices, &colors, &normals)
         };
 
-        let main_rotor: Mesh = helicopter.main_rotor;
-        let vertices: Vec<f32> = main_rotor.vertices;
-        let main_rotor_indices: Vec<u32> = main_rotor.indices;
-        let colors: Vec<f32> = main_rotor.colors;
-        let normals: Vec<f32> = main_rotor.normals;
+        let mut helicopter_main_rotor: Mesh = helicopter.main_rotor;
+        helicopter_main_rotor.is_helicopter = true;
+        let vertices: Vec<f32> = helicopter_main_rotor.vertices;
+        let main_rotor_indices: Vec<u32> = helicopter_main_rotor.indices;
+        let colors: Vec<f32> = helicopter_main_rotor.colors;
+        let normals: Vec<f32> = helicopter_main_rotor.normals;
 
         let helicopter_main_rotor_Vao: u32 = unsafe {
             create_vao(&vertices, &main_rotor_indices, &colors, &normals)
         };
 
-        let tail_rotor: Mesh = helicopter.tail_rotor;
-        let vertices: Vec<f32> = tail_rotor.vertices;
-        let tail_rotor_indices: Vec<u32> = tail_rotor.indices;
-        let colors: Vec<f32> = tail_rotor.colors;
-        let normals: Vec<f32> = tail_rotor.normals;
+        let mut helicopter_tail_rotor: Mesh = helicopter.tail_rotor;
+        helicopter_tail_rotor.is_helicopter = true;
+        let vertices: Vec<f32> = helicopter_tail_rotor.vertices;
+        let tail_rotor_indices: Vec<u32> = helicopter_tail_rotor.indices;
+        let colors: Vec<f32> = helicopter_tail_rotor.colors;
+        let normals: Vec<f32> = helicopter_tail_rotor.normals;
 
         let helicopter_tail_rotor_Vao: u32 = unsafe {
             create_vao(&vertices, &tail_rotor_indices, &colors, &normals)
         };
+
+
+        let mut root_node: Node = SceneNode::new();
+        let mut terrain_node: Node = SceneNode::from_vao(terrain_vao, terrain_indices.len() as i32);
+        let mut helicopter_body_node: Node = SceneNode::from_vao(helicopter_body_Vao, body_indices.len() as i32);
+        let mut helicopter_door_node: Node = SceneNode::from_vao(helicopter_door_Vao, door_indices.len() as i32);
+        let mut helicopter_main_rotor_node: Node = SceneNode::from_vao(helicopter_main_rotor_Vao, main_rotor_indices.len() as i32);
+        let mut helicopter_tail_rotor_node: Node = SceneNode::from_vao(helicopter_tail_rotor_Vao, tail_rotor_indices.len() as i32);
+        let mut helicopter_root_node:Node = SceneNode::new();
+
+        
+        helicopter_body_node.add_child(&helicopter_door_node);
+        helicopter_body_node.add_child(&helicopter_main_rotor_node);
+        helicopter_body_node.add_child(&helicopter_tail_rotor_node);
+        helicopter_root_node.add_child(&helicopter_body_node);
+        terrain_node.add_child(&helicopter_root_node);
+        root_node.add_child(&terrain_node);
+
+        terrain_node.position = glm::vec3(0.0, 0.0, 0.0);
+        helicopter_body_node.position = glm::vec3(0.0, 0.0, 0.0); // how do i get the correct position?
+        helicopter_door_node.position = glm::vec3(0.0, 0.0, 0.0);
+        helicopter_main_rotor_node.position = glm::vec3(0.0, 0.0, 0.0);
+        helicopter_tail_rotor_node.position = glm::vec3(0.35, 2.3, 10.4);
+
+        helicopter_body_node.rotation = glm::vec3(0.0, 0.0, 0.0);
+        helicopter_door_node.rotation = glm::vec3(0.0, 0.0, 0.0);
+
+
+
+        
+
+
+
+
         
         
 
-        // Draw the VAO
-        //TODO: Make into for loop
-        // unsafe {
-        //     gl::BindVertexArray(terrain_vao);
-            
-        //     gl::DrawElements(
-        //         gl::TRIANGLES,
-        //         indices.len() as i32,
-        //         gl::UNSIGNED_INT,
-        //         std::ptr::null()
-        //     );
-
-        //     gl::BindVertexArray(helicopter_body_Vao);
-        //     gl::DrawElements(
-        //         gl::TRIANGLES,
-        //         indices.len() as i32,
-        //         gl::UNSIGNED_INT,
-        //         std::ptr::null()
-        //     );
-
-        //     gl::BindVertexArray(helicopter_door_Vao);
-        //     gl::DrawElements(
-        //         gl::TRIANGLES,
-        //         indices.len() as i32,
-        //         gl::UNSIGNED_INT,
-        //         std::ptr::null()
-        //     );
-
-        //     gl::BindVertexArray(helicopter_main_rotor_Vao);
-        //     gl::DrawElements(
-        //         gl::TRIANGLES,
-        //         indices.len() as i32,
-        //         gl::UNSIGNED_INT,
-        //         std::ptr::null()
-        //     );
-
-        //     gl::BindVertexArray(helicopter_tail_rotor_Vao);
-        //     gl::DrawElements(
-        //         gl::TRIANGLES,
-        //         indices.len() as i32,
-        //         gl::UNSIGNED_INT,
-        //         std::ptr::null()
-        //     );
-        // }
         
-        // set up camera
 
         let mut pitch: f32 = 0.0; // rotation around x-axis
         let mut yaw: f32 = -90.0_f32.to_radians(); // rotation around y-axis
@@ -518,6 +572,7 @@ fn main() {
         let mut camera_front: Vec3 = glm::vec3(0.0, 0.0, -1.0);
         let camera_up = glm::vec3(0.0, 1.0, 0.0);
 
+        
         
 
 
@@ -643,6 +698,12 @@ _ => { }
             let identity_matrix: glm::Mat4 = glm::identity();  
             let mut mixed_matrix = perspective_projection * view * identity_matrix;
 
+            // to fix light
+            let model_matrix: glm::Mat4 = glm::identity(); // TODO: Add transformations here, pass to vertex shader like its done below
+
+
+
+
             unsafe {
                 // Clear the color and depth buffers
                 gl::ClearColor(0.035, 0.046, 0.078, 1.0); // night sky
@@ -655,56 +716,70 @@ _ => { }
                 gl::UniformMatrix4fv(transformation_matrix_location, 1, gl::FALSE, mixed_matrix.as_ptr());
 
                 // Pass the 'elapsed_time' to the 'time' uniform in the shader
-                let time_uniform_location = gl::GetUniformLocation(shader_program.program_id, "time".as_ptr() as *const i8);
-                gl::Uniform1f(time_uniform_location, elapsed);
+                //let time_uniform_location = gl::GetUniformLocation(shader_program.program_id, "time".as_ptr() as *const i8);
+                gl::Uniform1f(1, elapsed);
+
+                
+                
+          
+
                 // == // Issue the necessary gl:: commands to draw your scene here
                 shader_program.activate();
                 // Pass the 'elapsed_time' to the 'time' uniform in the shader
                 
+                draw_scene(&root_node, &mixed_matrix, &identity_matrix, shader_program.program_id);
 
                 // Bind the VAO
-                
 
-                gl::BindVertexArray(helicopter_body_Vao);
-                gl::DrawElements(
-                    gl::TRIANGLES,
-                    body_indices.len() as i32,
-                    gl::UNSIGNED_INT,
-                    std::ptr::null()
-                );
+                // gl::BindVertexArray(helicopter_body_Vao);
+                // is_helicopter = body.is_helicopter;
+                // gl::Uniform1i(2, is_helicopter as i32);
+                // gl::DrawElements(
+                //     gl::TRIANGLES,
+                //     body_indices.len() as i32,
+                //     gl::UNSIGNED_INT,
+                //     std::ptr::null()
+                // );
 
-                gl::BindVertexArray(helicopter_door_Vao);
-                gl::DrawElements(
-                    gl::TRIANGLES,
-                    door_indices.len() as i32,
-                    gl::UNSIGNED_INT,
-                    std::ptr::null()
-                );
+                // gl::BindVertexArray(helicopter_door_Vao);
+                // is_helicopter = helicopter_door.is_helicopter;
+                // gl::Uniform1i(2, is_helicopter as i32);
+                // gl::DrawElements(
+                //     gl::TRIANGLES,
+                //     door_indices.len() as i32,
+                //     gl::UNSIGNED_INT,
+                //     std::ptr::null()
+                // );
 
-                gl::BindVertexArray(helicopter_main_rotor_Vao);
-                gl::DrawElements(
-                    gl::TRIANGLES,
-                    main_rotor_indices.len() as i32,
-                    gl::UNSIGNED_INT,
-                    std::ptr::null()
-                );
+                // gl::BindVertexArray(helicopter_main_rotor_Vao);
+                // is_helicopter = helicopter_main_rotor.is_helicopter;
+                // gl::Uniform1i(2, is_helicopter as i32);
+                // gl::DrawElements(
+                //     gl::TRIANGLES,
+                //     main_rotor_indices.len() as i32,
+                //     gl::UNSIGNED_INT,
+                //     std::ptr::null()
+                // );
 
-                gl::BindVertexArray(helicopter_tail_rotor_Vao);
-                gl::DrawElements(
-                    gl::TRIANGLES,
-                    tail_rotor_indices.len() as i32,
-                    gl::UNSIGNED_INT,
-                    std::ptr::null()
-                );
+                // gl::BindVertexArray(helicopter_tail_rotor_Vao);
+                // is_helicopter = helicopter_tail_rotor.is_helicopter;
+                // gl::Uniform1i(2, is_helicopter as i32);
+                // gl::DrawElements(
+                //     gl::TRIANGLES,
+                //     tail_rotor_indices.len() as i32,
+                //     gl::UNSIGNED_INT,
+                //     std::ptr::null()
+                // );
 
-                gl::BindVertexArray(terrain_vao);
-                
-                gl::DrawElements(
-                    gl::TRIANGLES,
-                    terrain_indices.len() as i32,
-                    gl::UNSIGNED_INT,
-                    std::ptr::null()
-                );
+                // gl::BindVertexArray(terrain_vao);
+                // is_helicopter = terrain.is_helicopter;
+                // gl::Uniform1i(2, is_helicopter as i32);
+                // gl::DrawElements(
+                //     gl::TRIANGLES,
+                //     terrain_indices.len() as i32,
+                //     gl::UNSIGNED_INT,
+                //     std::ptr::null()
+                // );
 
                 // Unbind the VAO (optional, good practice to prevent accidental modifications)
                 gl::BindVertexArray(0);

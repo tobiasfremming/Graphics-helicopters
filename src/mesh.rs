@@ -13,6 +13,7 @@ pub struct Mesh {
     pub colors      : Vec<f32>,
     pub indices     : Vec<u32>,
     pub index_count : i32,
+    pub is_helicopter: bool,
 }
 
 impl Mesh {
@@ -25,6 +26,7 @@ impl Mesh {
             indices: mesh.indices,
             colors: generate_color_vec(color, num_verts),
             index_count,
+            is_helicopter: false,
         }
     }
 }
