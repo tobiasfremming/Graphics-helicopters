@@ -10,7 +10,7 @@
 extern crate nalgebra_glm as glm;
 use std::option::Iter;
 use std::{ mem, ptr, os::raw::c_void };
-use std::thread;
+use std::{path, thread};
 use std::sync::{Mutex, Arc, RwLock};
 use std::time::Instant;
 
@@ -322,6 +322,24 @@ fn draw_object(mesh: &Mesh, vao: u32, indices_lenght: i32) {
 
 }
 
+unsafe fn get_vao_from_mesh(path: &str ) -> (u32, u32){
+    // Load the texture, and create the vao
+    let model: Mesh = mesh::Terrain::load(path);
+        let vertices: Vec<f32> = model.vertices;
+        let indices: Vec<u32> = model.indices;
+        let colors: Vec<f32> = model.colors;
+        let normals: Vec<f32> = model.normals;
+
+        // Create the VAO
+        let vao: u32 =create_vao(&vertices, &indices, &colors, &normals);
+        
+
+        (vao, indices.len() as u32)
+
+}
+
+
+
 
 unsafe fn draw_scene(node: &scene_graph::SceneNode,
     view_projection_matrix: &glm::Mat4,
@@ -477,25 +495,22 @@ fn main() {
             shader_program.activate();
         }
 
-        
-        //let  vertices: Vec<f32> = create_box((-0.5, -0.5, -0.5), 1.0, 1.0, 1.0);
-        // let mut vertices: Vec<f32> = vec![];
-
-        //let indices: Vec<u32> = vec![];
-
-        //let colors: Vec<f32> = vec![];
+    
 
         // load the terrain
-        let terrain: Mesh = mesh::Terrain::load("./resources/lunarsurface.obj");
-        let vertices: Vec<f32> = terrain.vertices;
-        let terrain_indices: Vec<u32> = terrain.indices;
-        let colors: Vec<f32> = terrain.colors;
-        let normals: Vec<f32> = terrain.normals;
+        // let terrain: Mesh = mesh::Terrain::load("./resources/lunarsurface.obj");
+        // let vertices: Vec<f32> = terrain.vertices;
+        // let terrain_indices: Vec<u32> = terrain.indices;
+        // let colors: Vec<f32> = terrain.colors;
+        // let normals: Vec<f32> = terrain.normals;
 
-        // Create the VAO
-        let terrain_vao: u32 = unsafe {
-            create_vao(&vertices, &terrain_indices, &colors, &normals)
-        };
+        // // Create the VAO
+        // let terrain_vao: u32 = unsafe {
+        //     create_vao(&vertices, &terrain_indices, &colors, &normals)
+        // };
+        let (terrain_vao, terrain_indices_lenght) = unsafe { get_vao_from_mesh("./resources/lunarsurface.obj") };
+        
+
 
         // load the helicopter
         let helicopter: Helicopter = mesh::Helicopter::load("./resources/helicopter.obj");
@@ -546,7 +561,7 @@ fn main() {
 
 
         let mut root_node: Node = SceneNode::new();
-        let mut terrain_node: Node = SceneNode::from_vao(terrain_vao, terrain_indices.len() as i32);
+        let mut terrain_node: Node = SceneNode::from_vao(terrain_vao, terrain_indices_lenght as i32);
         let mut helicopter_body_node: Node = SceneNode::from_vao(helicopter_body_Vao, body_indices.len() as i32);
         let mut helicopter_door_node: Node = SceneNode::from_vao(helicopter_door_Vao, door_indices.len() as i32);
         let mut helicopter_main_rotor_node: Node = SceneNode::from_vao(helicopter_main_rotor_Vao, main_rotor_indices.len() as i32);
@@ -570,19 +585,7 @@ fn main() {
         helicopter_main_rotor_node.rotation = glm::vec3(0.0, 0.1, 0.0);
         helicopter_tail_rotor_node.rotation = glm::vec3(0.1, 0.0, 0.0);
 
-        
-
-
-
-
-
-        
-
-
-
-
-        
-        
+    
 
         
 
@@ -655,13 +658,6 @@ fn main() {
                         VirtualKeyCode::Right => yaw += rotation_speed,  // Rotate right (around Y-axis)
                         // The `VirtualKeyCode` enum is defined here:
                         //    https://docs.rs/winit/0.25.0/winit/event/enum.VirtualKeyCode.html
-
-                        // VirtualKeyCode::A => {
-                        //     _arbitrary_number += delta_time;
-                        // }
-                        // VirtualKeyCode::D => {
-                        //     _arbitrary_number -= delta_time;
-                        // }
 
 _ => { }
                     
@@ -737,11 +733,7 @@ _ => { }
                 gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
 
-                //transformation_matrix = glm::translate(&transformation_matrix, &glm::vec3(f32::sin(elapsed*0.5), f32::sin(elapsed*0.5), 0.0));
-                // Pass the 'transformation_matrix' to the 'transformation_matrix' uniform in the shader
-                // let transformation_matrix_location: i32 = gl::GetUniformLocation(shader_program.program_id, "transformation_matrix\0".as_ptr() as *const i8);
-                // gl::UniformMatrix4fv(transformation_matrix_location, 1, gl::FALSE, mixed_matrix.as_ptr());
-
+                
                 // Pass the 'elapsed_time' to the 'time' uniform in the shader
                 //let time_uniform_location = gl::GetUniformLocation(shader_program.program_id, "time".as_ptr() as *const i8);
                 gl::Uniform1f(1, elapsed);
