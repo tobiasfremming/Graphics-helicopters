@@ -46,7 +46,6 @@ use scene_graph::{Node, SceneNode};
 // }
 
 static mut is_helicopter: bool = false;
-static mut mouse_enabled: bool = false;
 
 // initial window size
 const INITIAL_SCREEN_W: u32 = 800;
@@ -309,12 +308,18 @@ fn main() {
     let windowed_context = cb.build_windowed(wb, &el).unwrap();
     // Uncomment these if you want to use the mouse for controls, but want it to be confined to the screen and/or invisible.
     
-    // if unsafe{mouse_enabled}{
-    //     windowed_context.window().set_cursor_grab(true).expect("failed to grab cursor");
-    //     windowed_context.window().set_cursor_visible(false);
-    // }
+    windowed_context.window().set_fullscreen(Some(glutin::window::Fullscreen::Borderless(windowed_context.window().current_monitor())));
     windowed_context.window().set_cursor_grab(CursorGrabMode::Confined).expect("failed to grab cursor");
     windowed_context.window().set_cursor_visible(false);
+
+    // if unsafe{mouse_enabled}{
+    //     windowed_context.window().set_cursor_grab(CursorGrabMode::Confined).expect("failed to grab cursor");
+    //     windowed_context.window().set_cursor_visible(false);
+    // }
+    // else {
+    //     windowed_context.window().set_cursor_grab(CursorGrabMode::None).expect("failed to grab cursor");
+    //     windowed_context.window().set_cursor_visible(false);
+    // }
     
     
 
@@ -343,6 +348,7 @@ fn main() {
             gl::load_with(|symbol| c.get_proc_address(symbol) as *const _);
             c
         };
+        
 
         let mut window_aspect_ratio = INITIAL_SCREEN_W as f32 / INITIAL_SCREEN_H as f32;
 
@@ -494,7 +500,9 @@ fn main() {
         let mut camera_front: Vec3 = glm::vec3(0.0, 0.0, -1.0);
         let camera_up = glm::vec3(0.0, 1.0, 0.0);
 
-        
+        let mouse_sensitivity = 0.003;
+        let mut mouse_enabled = true;
+
         
 
 
@@ -546,6 +554,9 @@ fn main() {
 
 
                     match key {
+
+                        
+
                         VirtualKeyCode::W => camera_position += speed * camera_front,  // Move forward
                         VirtualKeyCode::S => camera_position -= speed * camera_front,  // Move backward
                         VirtualKeyCode::A => camera_position -= glm::normalize(&glm::cross(&camera_front, &camera_up)) * speed,   // Move left
@@ -560,6 +571,8 @@ fn main() {
                         VirtualKeyCode::Right => yaw += rotation_speed,  // Rotate right (around Y-axis)
                         // The `VirtualKeyCode` enum is defined here:
                         //    https://docs.rs/winit/0.25.0/winit/event/enum.VirtualKeyCode.html
+
+
 
 _ => { }
                     
@@ -576,10 +589,30 @@ _ => { }
             // Handle mouse movement. delta contains the x and y movement of the mouse since last frame in pixels
             if let Ok(mut delta) = mouse_delta.lock() {
 
-                // == // Optionally access the accumulated mouse movement between
-                // == // frames here with `delta.0` and `delta.1`
+                if mouse_enabled{
 
-                *delta = (0.0, 0.0); // reset when done
+                    
+                    yaw += delta.0 as f32 * mouse_sensitivity;
+                    pitch -= delta.1 as f32 * mouse_sensitivity;
+
+                    // Clamp the pitch value to prevent camera flip
+                    let pitch_limit = 89.0_f32.to_radians();
+                    if pitch > pitch_limit {
+                        pitch = pitch_limit;
+                    }
+                    if pitch < -pitch_limit {
+                        pitch = -pitch_limit;
+                    }
+
+                    let front = glm::vec3(
+                        yaw.cos() * pitch.cos(),
+                        pitch.sin(),
+                        yaw.sin() * pitch.cos(),
+                    );
+
+                    *delta = (0.0, 0.0); // reset when done
+
+                }
             }
 
                         // default handler:
