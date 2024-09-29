@@ -10,6 +10,7 @@
 extern crate nalgebra_glm as glm;
 use std::option::Iter;
 use std::{ mem, ptr, os::raw::c_void };
+use glutin::window::CursorGrabMode;
 use std::{path, thread};
 use std::sync::{Mutex, Arc, RwLock};
 use std::time::Instant;
@@ -45,6 +46,7 @@ use scene_graph::{Node, SceneNode};
 // }
 
 static mut is_helicopter: bool = false;
+static mut mouse_enabled: bool = false;
 
 // initial window size
 const INITIAL_SCREEN_W: u32 = 800;
@@ -84,28 +86,11 @@ fn offset<T>(n: u32) -> *const c_void {
 
 // == // Generate your VAO here
 unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f32>, normals: &Vec<f32>) -> u32 {
-    
-
-    // Also, feel free to delete comments :)
-
-    // This should:
-    // * Generate a VAO and bind it
-    // * Generate a VBO and bind it
-    // * Fill it with data
-    // * Configure a VAP for the data and enable it
-    // * Generate a IBO and bind it
-    // * Fill it with data
-    // * Return the ID of the VAO
 
     // Generate the VAO
     let mut vao: u32 = 0;
     gl::GenVertexArrays(1, &mut vao);
     gl::BindVertexArray(vao);
-    
-
-    
-
-    
     
     
 
@@ -188,13 +173,7 @@ unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f32>,
     );
 
     gl::EnableVertexAttribArray(2);
-    
-
-    // Enable the VAP
-    
-    
-
-
+        
     vao
 
 
@@ -216,111 +195,9 @@ fn create_square(uv: f32, offset_x: f32, offset_y: f32, offset_z: f32) -> Vec<f3
     vertices
 }
 
-fn create_box(
-    start_point: (f32, f32, f32), 
-    width: f32, 
-    height: f32, 
-    depth: f32
-) -> Vec<f32> {
-    let (x, y, z) = start_point;
-    let point0 = [x, y, z];
-    let point1 = [x + width, y, z];
-    let point2 = [x, y + height, z];
-    let point3 = [x + width, y + height, z];
-    let point4 = [x, y, z - depth];
-    let point5 = [x + width, y, z - depth];
-    let point6 = [x, y + height, z - depth];
-    let point7 = [x + width, y + height, z - depth];
-    
-
-    let mut vertices: Vec<f32> = Vec::new();
-
-    vertices.extend_from_slice(&point0);
-    vertices.extend_from_slice(&point1);
-    vertices.extend_from_slice(&point2);
-
-    vertices.extend_from_slice(&point1);
-    vertices.extend_from_slice(&point3);
-    vertices.extend_from_slice(&point2);
-
-
-    vertices.extend_from_slice(&point1);
-    vertices.extend_from_slice(&point5);
-    vertices.extend_from_slice(&point3);
-
-    vertices.extend_from_slice(&point5);
-    vertices.extend_from_slice(&point7);
-    vertices.extend_from_slice(&point3);
-
-
-    vertices.extend_from_slice(&point5);
-    vertices.extend_from_slice(&point4);
-    vertices.extend_from_slice(&point7);
-
-    vertices.extend_from_slice(&point4);
-    vertices.extend_from_slice(&point6);
-    vertices.extend_from_slice(&point7);
-
-
-    vertices.extend_from_slice(&point4);
-    vertices.extend_from_slice(&point0);
-    vertices.extend_from_slice(&point6);
-
-    vertices.extend_from_slice(&point0);
-    vertices.extend_from_slice(&point2);
-    vertices.extend_from_slice(&point6);
-
-
-    vertices.extend_from_slice(&point6);
-    vertices.extend_from_slice(&point7);
-    vertices.extend_from_slice(&point2);
-
-    vertices.extend_from_slice(&point7);
-    vertices.extend_from_slice(&point3);
-    vertices.extend_from_slice(&point2);
-
-
-    vertices.extend_from_slice(&point4);
-    vertices.extend_from_slice(&point5);
-    vertices.extend_from_slice(&point0);
-
-    vertices.extend_from_slice(&point5);
-    vertices.extend_from_slice(&point1);
-    vertices.extend_from_slice(&point0);
-
-
-    vertices.extend_from_slice(&point2);
-    vertices.extend_from_slice(&point3);
-    vertices.extend_from_slice(&point6);
-
-    vertices.extend_from_slice(&point3);
-    vertices.extend_from_slice(&point7);
-    vertices.extend_from_slice(&point6);
 
 
 
-
-
-
-
-    vertices
-}
-
-// never mind this just now
-fn draw_object(mesh: &Mesh, vao: u32, indices_lenght: i32) {
-    unsafe {
-        gl::BindVertexArray(vao);
-        gl::Uniform1i(2, mesh.is_helicopter as i32);
-        gl::DrawElements(
-            gl::TRIANGLES,
-            indices_lenght as i32,
-            gl::UNSIGNED_INT,
-            std::ptr::null()
-        );
-    }
-
-
-}
 
 unsafe fn get_vao_from_mesh(path: &str ) -> (u32, u32){
     // Load the texture, and create the vao
@@ -341,68 +218,81 @@ unsafe fn get_vao_from_mesh(path: &str ) -> (u32, u32){
 
 
 
-unsafe fn draw_scene(node: &scene_graph::SceneNode,
-    view_projection_matrix: &glm::Mat4,
-    transformation_so_far: &glm::Mat4, shader_program_id: u32) {
-    // Perform any logic needed before drawing the node
-    // Check if node is drawable, if so: set uniforms, bind VAO and draw VAO
 
-    // The node should be drawable if it has a VAO ID not equal to 0
-    if node.index_count != -1 {
 
-        
+unsafe fn draw_scene(
+        node: &scene_graph::SceneNode,
+        view_projection_matrix: &glm::Mat4,
+        transformation_so_far: &glm::Mat4,
+        shader_program_id: u32,
+    ) {
         // Compute the transformation matrix for the current node
         let mut transformation_matrix = glm::identity();
-
-        //transformation_matrix = glm::translate(&transformation_matrix, &-node.reference_point);
-        println!("node.position: {:?}", node.position);
-        println!("node.reference_point: {:?}", node.reference_point);
+    
+        // Apply node's transformations
         transformation_matrix = glm::translate(&transformation_matrix, &node.position);
-        // Rotate
+        transformation_matrix = glm::translate(&transformation_matrix, &node.reference_point);
+    
+        // Apply rotations
         transformation_matrix = glm::rotate(&transformation_matrix, node.rotation[0], &glm::vec3(1.0, 0.0, 0.0));
         transformation_matrix = glm::rotate(&transformation_matrix, node.rotation[1], &glm::vec3(0.0, 1.0, 0.0));
         transformation_matrix = glm::rotate(&transformation_matrix, node.rotation[2], &glm::vec3(0.0, 0.0, 1.0));
     
-        transformation_matrix = glm::translate(&transformation_matrix, &-node.position);
-        
-        //transformation_matrix = glm::translate(&transformation_matrix, &-node.reference_point);
-        // Scale
-        //transformation_matrix = glm::scale(&transformation_matrix, &node.scale);
-        // Combine the transformation matrix with the transformation so far
-        let transformation_so_far = transformation_matrix * transformation_so_far;
-        let mixed_matrix =  view_projection_matrix * transformation_so_far;
+        // Apply scaling
+        transformation_matrix = glm::scale(&transformation_matrix, &node.scale);
+    
+        // Move back by reference point if necessary
+        transformation_matrix = glm::translate(&transformation_matrix, &-node.reference_point);
+        transformation_matrix = glm::translate(&transformation_matrix, &-&node.position);
+    
 
-        // Pass the transformation matrix to the shader
-        let transformation_so_far_location = gl::GetUniformLocation(shader_program_id, "transformation_so_far\0".as_ptr() as *const i8);
-        gl::UniformMatrix4fv(transformation_so_far_location, 1, gl::FALSE, transformation_so_far.as_ptr());
-        
-        // Pass the view-projection matrix to the shader
-        let view_projection_matrix_location = gl::GetUniformLocation(shader_program_id, "view_projection_matrix\0".as_ptr() as *const i8);
-        gl::UniformMatrix4fv(view_projection_matrix_location, 1, gl::FALSE, mixed_matrix.as_ptr());
-
-        // Bind the VAO
-        gl::BindVertexArray(node.vao_id);
-
-        //gl::Uniform1i(2, node.vao_id.mesh.is_helicopter as i32);
-
-
-        // Draw the VAO
-        gl::DrawElements(
-            gl::TRIANGLES,
-            node.index_count,
-            gl::UNSIGNED_INT,
-            std::ptr::null()
+        // Combine with the transformation so far
+        let updated_transformation = transformation_so_far * transformation_matrix;
+        let mixed_matrix = view_projection_matrix * updated_transformation;
+    
+        // Pass matrices to the shader
+        let transformation_so_far_location = gl::GetUniformLocation(
+            shader_program_id,
+            "transformation_so_far\0".as_ptr() as *const i8,
         );
-
+        gl::UniformMatrix4fv(
+            transformation_so_far_location,
+            1,
+            gl::FALSE,
+            updated_transformation.as_ptr(),
+        );
+    
+        let view_projection_matrix_location = gl::GetUniformLocation(
+            shader_program_id,
+            "view_projection_matrix\0".as_ptr() as *const i8,
+        );
+        gl::UniformMatrix4fv(
+            view_projection_matrix_location,
+            1,
+            gl::FALSE,
+            mixed_matrix.as_ptr(),
+        );
+    
+        // Draw the node if it's drawable
+        if node.index_count != -1 {
+            gl::BindVertexArray(node.vao_id);
+            gl::DrawElements(
+                gl::TRIANGLES,
+                node.index_count,
+                gl::UNSIGNED_INT,
+                std::ptr::null(),
+            );
+        }
+    
+        // Recurse with the updated transformation
+        for &child in &node.children {
+            draw_scene(&*child, view_projection_matrix, &updated_transformation, shader_program_id);
+        }
     }
-
-    // Recurse
-    for &child in &node.children {
-    draw_scene(&*child, view_projection_matrix, transformation_so_far, shader_program_id);
-    }
-    }
+    
 
 
+    
 
 fn main() {
     // Set up the necessary objects to deal with windows and event handling
@@ -418,8 +308,15 @@ fn main() {
         .with_vsync(true);
     let windowed_context = cb.build_windowed(wb, &el).unwrap();
     // Uncomment these if you want to use the mouse for controls, but want it to be confined to the screen and/or invisible.
-    // windowed_context.window().set_cursor_grab(true).expect("failed to grab cursor");
-    // windowed_context.window().set_cursor_visible(false);
+    
+    // if unsafe{mouse_enabled}{
+    //     windowed_context.window().set_cursor_grab(true).expect("failed to grab cursor");
+    //     windowed_context.window().set_cursor_visible(false);
+    // }
+    windowed_context.window().set_cursor_grab(CursorGrabMode::Confined).expect("failed to grab cursor");
+    windowed_context.window().set_cursor_visible(false);
+    
+    
 
     // Set up a shared vector for keeping track of currently pressed keys
     let arc_pressed_keys = Arc::new(Mutex::new(Vec::<VirtualKeyCode>::with_capacity(10)));
@@ -568,11 +465,7 @@ fn main() {
         let mut helicopter_tail_rotor_node: Node = SceneNode::from_vao(helicopter_tail_rotor_Vao, tail_rotor_indices.len() as i32);
 
         
-        helicopter_body_node.add_child(&helicopter_door_node);
-        helicopter_body_node.add_child(&helicopter_main_rotor_node);
-        helicopter_body_node.add_child(&helicopter_tail_rotor_node);
-        terrain_node.add_child(&helicopter_body_node);
-        root_node.add_child(&terrain_node);
+        
 
         terrain_node.position = glm::vec3(0.0, 0.0, 0.0);
         helicopter_body_node.position = glm::vec3(0.0, 0.0, 0.0); // how do i get the correct position?
@@ -586,7 +479,11 @@ fn main() {
         helicopter_tail_rotor_node.rotation = glm::vec3(0.1, 0.0, 0.0);
 
     
-
+        helicopter_body_node.add_child(&helicopter_door_node);
+        helicopter_body_node.add_child(&helicopter_main_rotor_node);
+        helicopter_body_node.add_child(&helicopter_tail_rotor_node);
+        terrain_node.add_child(&helicopter_body_node);
+        root_node.add_child(&terrain_node);
         
 
         let mut pitch: f32 = 0.0; // rotation around x-axis
@@ -617,8 +514,13 @@ fn main() {
 
 
             let rotor_rotation_speed = 10.0; 
+            helicopter_body_node.rotation[1] += rotor_rotation_speed* 0.1 * delta_time;
             helicopter_main_rotor_node.rotation[1] += rotor_rotation_speed * delta_time;
             helicopter_tail_rotor_node.rotation[0] += rotor_rotation_speed * delta_time;
+
+
+
+            
 
             // Handle resize events
             if let Ok(mut new_size) = window_size.lock() {
@@ -701,7 +603,7 @@ _ => { }
             let aspect = window_aspect_ratio;
             let fovy = 45.0; // FOV (field of view) in degrees
             let near = 1.0; // near plane
-            let far = 1000.0; // far plane
+            let far = 5000.0; // far plane
 
             let perspective_projection: glm::Mat4 = glm::perspective(    
                 aspect, 
