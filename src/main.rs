@@ -253,17 +253,16 @@ unsafe fn draw_scene(
         let updated_transformation = transformation_so_far * transformation_matrix;
         let mixed_matrix = view_projection_matrix * updated_transformation;
         let normal_matrix: Mat3 = updated_transformation.fixed_slice::<3, 3>(0, 0).into();
-        
         // Pass matrices to the shader
         let transformation_so_far_location = gl::GetUniformLocation(
             shader_program_id,
             "transformation_so_far\0".as_ptr() as *const i8,
         );
-        gl::UniformMatrix4fv(
+        gl::UniformMatrix3fv(
             transformation_so_far_location,
             1,
             gl::FALSE,
-            mixed_matrix.as_ptr(),
+            normal_matrix.as_ptr(),
         );
     
         let view_projection_matrix_location = gl::GetUniformLocation(

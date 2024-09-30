@@ -2,7 +2,7 @@
 
 in layout(location=0) smooth vec4 fragColor;
 in layout(location=1) vec2 fragCoord;
-in layout(location=2) vec4 fragNormal;
+in layout(location=2) vec3 fragNormal;
 uniform layout(location=1)float time;
 uniform layout(location=2) bool is_helicopter;
 
@@ -11,7 +11,7 @@ out vec4 color;
 
 
 
-vec4 lightDirection = normalize(vec4(0.8, -0.5, 0.6, 0.0));
+vec3 lightDirection = normalize(vec3(0.8, -0.5, 0.6));
 
 
 
@@ -24,15 +24,10 @@ void main()
     float blue  = abs(sin(time * 0.9));
     
     
-    vec4 colorvec = fragColor;
-    
-  
-    if (is_helicopter){
-        colorvec = vec4(red, green, blue, 1.0);
-    }
+    vec3 colorvec = vec3(fragColor.xyz);
 
 
-    vec4 colorWithLight = colorvec * max(0, dot(normalize(fragNormal), -lightDirection));
+    vec3 colorWithLight = colorvec* max(0, dot(normalize(fragNormal), -lightDirection));
 
     color = vec4(colorWithLight.xyz, fragColor.a);
     
