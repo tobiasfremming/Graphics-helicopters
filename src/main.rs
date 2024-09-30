@@ -16,17 +16,20 @@ use std::sync::{Mutex, Arc, RwLock};
 use std::time::Instant;
 
 
+
 mod shader;
 mod util;
 mod mesh;
 mod scene_graph;
+mod toolbox;
 
-use glm::{normalize_dot, Mat4, Vec3};
+use glm::{normalize_dot, Mat3, Mat4, Vec3};
 use glutin::event::ElementState;
 use glutin::event::{Event, WindowEvent, DeviceEvent, KeyboardInput, ElementState::{Pressed, Released}, VirtualKeyCode::{self, *}};
 use glutin::event_loop::ControlFlow;
 use mesh::{Helicopter, Mesh};
 use scene_graph::{Node, SceneNode};
+use toolbox::Heading;
 
 
 
@@ -227,6 +230,7 @@ unsafe fn draw_scene(
     ) {
         // Compute the transformation matrix for the current node
         let mut transformation_matrix = glm::identity();
+
     
         // Apply node's transformations
         transformation_matrix = glm::translate(&transformation_matrix, &node.position);
@@ -248,7 +252,8 @@ unsafe fn draw_scene(
         // Combine with the transformation so far
         let updated_transformation = transformation_so_far * transformation_matrix;
         let mixed_matrix = view_projection_matrix * updated_transformation;
-    
+        let normal_matrix: Mat3 = updated_transformation.fixed_slice::<3, 3>(0, 0).into();
+        
         // Pass matrices to the shader
         let transformation_so_far_location = gl::GetUniformLocation(
             shader_program_id,
@@ -258,7 +263,7 @@ unsafe fn draw_scene(
             transformation_so_far_location,
             1,
             gl::FALSE,
-            updated_transformation.as_ptr(),
+            mixed_matrix.as_ptr(),
         );
     
         let view_projection_matrix_location = gl::GetUniformLocation(
@@ -474,7 +479,7 @@ fn main() {
         
 
         terrain_node.position = glm::vec3(0.0, 0.0, 0.0);
-        helicopter_body_node.position = glm::vec3(0.0, 0.0, 0.0); // how do i get the correct position?
+        helicopter_body_node.position = glm::vec3(0.0, 100.0, 0.0); // how do i get the correct position?
         helicopter_door_node.position = glm::vec3(0.0, 0.0, 0.0);
         helicopter_main_rotor_node.position = glm::vec3(0.0, 0.0, 0.0);
         helicopter_tail_rotor_node.position = glm::vec3(0.35, 2.3, 10.4);
@@ -503,7 +508,6 @@ fn main() {
         let mouse_sensitivity = 0.003;
         let mut mouse_enabled = true;
 
-        
 
 
         // Used to demonstrate keyboard handling for exercise 2.
@@ -526,7 +530,11 @@ fn main() {
             helicopter_main_rotor_node.rotation[1] += rotor_rotation_speed * delta_time;
             helicopter_tail_rotor_node.rotation[0] += rotor_rotation_speed * delta_time;
 
-
+            // let animation: Heading = toolbox::simple_heading_animation(elapsed);
+            // helicopter_body_node.position = glm::vec3(animation.x, helicopter_body_node.position[1], animation.z);
+            // helicopter_body_node.rotation[2] = animation.roll;
+            // helicopter_body_node.rotation[1] = animation.yaw;
+            // helicopter_body_node.rotation[0] = animation.pitch;
 
             
 
@@ -542,7 +550,7 @@ fn main() {
             }
 
 
-            let speed: f32 = 50.0 * delta_time;  
+            let speed: f32 = 30.0 * delta_time;  
             let rotation_speed: f32 = 1.0 * delta_time;  
             
 
