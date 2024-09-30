@@ -26,6 +26,7 @@ pub struct SceneNode {
     pub index_count : i32,             // How much of it there is to draw
 
     pub children: Vec<*mut SceneNode>, // Those I command
+    pub is_helicopter: bool,           // Whether I am a helicopter or not
 }
 
 impl SceneNode {
@@ -39,6 +40,7 @@ impl SceneNode {
             vao_id          : 0,
             index_count     : -1,
             children        : vec![],
+            is_helicopter   : false,
         })))
     }
 
@@ -51,6 +53,7 @@ impl SceneNode {
             vao_id,
             index_count,
             children: vec![],
+            is_helicopter: false,
         })))
     }
 
@@ -93,6 +96,7 @@ impl SceneNode {
             self.reference_point.x,
             self.reference_point.y,
             self.reference_point.z,
+             
         );
     }
 

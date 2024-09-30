@@ -48,7 +48,7 @@ use toolbox::Heading;
 //     }
 // }
 
-static mut is_helicopter: bool = false;
+
 
 // initial window size
 const INITIAL_SCREEN_W: u32 = 800;
@@ -275,6 +275,7 @@ unsafe fn draw_scene(
             gl::FALSE,
             mixed_matrix.as_ptr(),
         );
+        gl::Uniform1i(2, node.is_helicopter as i32);
     
         // Draw the node if it's drawable
         if node.index_count != -1 {
@@ -422,7 +423,6 @@ fn main() {
         // load the helicopter
         let helicopter: Helicopter = mesh::Helicopter::load("./resources/helicopter.obj");
         let mut body: Mesh = helicopter.body;
-        body.is_helicopter = true;
         let vertices: Vec<f32> = body.vertices;
         let body_indices: Vec<u32> = body.indices;
         let colors: Vec<f32> = body.colors;
@@ -434,7 +434,6 @@ fn main() {
         };
 
         let mut helicopter_door: Mesh = helicopter.door;
-        helicopter_door.is_helicopter = true;
         let vertices: Vec<f32> = helicopter_door.vertices;
         let door_indices: Vec<u32> = helicopter_door.indices;
         let colors: Vec<f32> = helicopter_door.colors;
@@ -445,7 +444,6 @@ fn main() {
         };
 
         let mut helicopter_main_rotor: Mesh = helicopter.main_rotor;
-        helicopter_main_rotor.is_helicopter = true;
         let vertices: Vec<f32> = helicopter_main_rotor.vertices;
         let main_rotor_indices: Vec<u32> = helicopter_main_rotor.indices;
         let colors: Vec<f32> = helicopter_main_rotor.colors;
@@ -456,7 +454,6 @@ fn main() {
         };
 
         let mut helicopter_tail_rotor: Mesh = helicopter.tail_rotor;
-        helicopter_tail_rotor.is_helicopter = true;
         let vertices: Vec<f32> = helicopter_tail_rotor.vertices;
         let tail_rotor_indices: Vec<u32> = helicopter_tail_rotor.indices;
         let colors: Vec<f32> = helicopter_tail_rotor.colors;
@@ -474,20 +471,30 @@ fn main() {
         let mut helicopter_main_rotor_node: Node = SceneNode::from_vao(helicopter_main_rotor_Vao, main_rotor_indices.len() as i32);
         let mut helicopter_tail_rotor_node: Node = SceneNode::from_vao(helicopter_tail_rotor_Vao, tail_rotor_indices.len() as i32);
 
-        
+        let mut helicopter_body_node2: Node = SceneNode::from_vao(helicopter_body_Vao, body_indices.len() as i32);
+        let mut helicopter_door_node2: Node = SceneNode::from_vao(helicopter_door_Vao, door_indices.len() as i32);
+        let mut helicopter_main_rotor_node2: Node = SceneNode::from_vao(helicopter_main_rotor_Vao, main_rotor_indices.len() as i32);
+        let mut helicopter_tail_rotor_node2: Node = SceneNode::from_vao(helicopter_tail_rotor_Vao, tail_rotor_indices.len() as i32);
+
         
 
         terrain_node.position = glm::vec3(0.0, 0.0, 0.0);
         helicopter_body_node.position = glm::vec3(0.0, 100.0, 0.0); // how do i get the correct position?
+        helicopter_body_node.is_helicopter = true;
         helicopter_door_node.position = glm::vec3(0.0, 0.0, 0.0);
+        helicopter_door_node.is_helicopter = true;
         helicopter_main_rotor_node.position = glm::vec3(0.0, 0.0, 0.0);
+        helicopter_main_rotor_node.is_helicopter = true;
         helicopter_tail_rotor_node.position = glm::vec3(0.35, 2.3, 10.4);
+        helicopter_tail_rotor_node.is_helicopter = true;
 
         helicopter_body_node.rotation = glm::vec3(0.0, 0.0, 0.0); // rotation around y axis
         helicopter_door_node.rotation = glm::vec3(0.0, 0.0, 0.0);
         helicopter_main_rotor_node.rotation = glm::vec3(0.0, 0.1, 0.0);
         helicopter_tail_rotor_node.rotation = glm::vec3(0.1, 0.0, 0.0);
 
+        helicopter_body_node2.position = glm::vec3(100.0, 100.0, 100.0);
+        helicopter_tail_rotor_node2.position = glm::vec3(0.35, 2.3, 10.4);
     
         helicopter_body_node.add_child(&helicopter_door_node);
         helicopter_body_node.add_child(&helicopter_main_rotor_node);
@@ -495,6 +502,11 @@ fn main() {
         terrain_node.add_child(&helicopter_body_node);
         root_node.add_child(&terrain_node);
         
+
+        helicopter_body_node2.add_child(&helicopter_door_node2);
+        helicopter_body_node2.add_child(&helicopter_main_rotor_node2);
+        helicopter_body_node2.add_child(&helicopter_tail_rotor_node2);
+        terrain_node.add_child(&helicopter_body_node2);
 
         let mut pitch: f32 = 0.0; // rotation around x-axis
         let mut yaw: f32 = -90.0_f32.to_radians(); // rotation around y-axis
@@ -525,15 +537,24 @@ fn main() {
 
 
             let rotor_rotation_speed = 10.0; 
-            helicopter_body_node.rotation[1] += rotor_rotation_speed* 0.1 * delta_time;
+            //helicopter_body_node.rotation[1] += rotor_rotation_speed* 0.1 * delta_time;
             helicopter_main_rotor_node.rotation[1] += rotor_rotation_speed * delta_time;
             helicopter_tail_rotor_node.rotation[0] += rotor_rotation_speed * delta_time;
 
-            // let animation: Heading = toolbox::simple_heading_animation(elapsed);
-            // helicopter_body_node.position = glm::vec3(animation.x, helicopter_body_node.position[1], animation.z);
-            // helicopter_body_node.rotation[2] = animation.roll;
-            // helicopter_body_node.rotation[1] = animation.yaw;
-            // helicopter_body_node.rotation[0] = animation.pitch;
+            let animation: Heading = toolbox::simple_heading_animation(elapsed);
+            helicopter_body_node.position = glm::vec3(animation.x, helicopter_body_node.position[1], animation.z);
+            helicopter_body_node.rotation[2] = animation.roll;
+            helicopter_body_node.rotation[1] = animation.yaw;
+            helicopter_body_node.rotation[0] = animation.pitch;
+
+            helicopter_main_rotor_node2.rotation[1] += rotor_rotation_speed * delta_time;
+            helicopter_tail_rotor_node2.rotation[0] += rotor_rotation_speed * delta_time;
+
+            let animation2: Heading = toolbox::simple_heading_animation(elapsed + 10.0);
+            helicopter_body_node2.position = glm::vec3(animation2.x, helicopter_body_node2.position[1], animation2.z);
+            helicopter_body_node2.rotation[2] = animation2.roll;
+            helicopter_body_node2.rotation[1] = animation2.yaw;
+            helicopter_body_node2.rotation[0] = animation2.pitch;
 
             
 
