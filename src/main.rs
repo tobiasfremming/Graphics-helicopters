@@ -507,6 +507,7 @@ fn main() {
         helicopter_body_node2.add_child(&helicopter_main_rotor_node2);
         helicopter_body_node2.add_child(&helicopter_tail_rotor_node2);
         terrain_node.add_child(&helicopter_body_node2);
+        
 
         let mut pitch: f32 = 0.0; // rotation around x-axis
         let mut yaw: f32 = -90.0_f32.to_radians(); // rotation around y-axis

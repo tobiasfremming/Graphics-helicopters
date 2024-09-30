@@ -32,7 +32,7 @@ void main()
         colorvec = fragColor.xyz;
     }
     
-
+    colorvec = fragColor.xyz;
 
     
 
