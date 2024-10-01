@@ -534,6 +534,11 @@ fn main() {
         }
         root_node.add_child(&terrain_node);
 
+        let mut camera_node: Node = SceneNode::new();
+        camera_node.position = glm::vec3(0.0, 0.0, 0.0);
+        camera_node.rotation = glm::vec3(0.0, 0.0, 0.0);
+        terrain_node.add_child(&camera_node);
+
         
 
 
@@ -547,7 +552,7 @@ fn main() {
 
         
         let mut camera_position:Vec3 = glm::vec3(0.0, 0.0, 0.0);
-        let mut camera_front: Vec3 = glm::vec3(0.0, 0.0, -1.0);
+        //let mut camera_front: Vec3 = glm::vec3(0.0, 0.0, -1.0);
         let camera_up = glm::vec3(0.0, 1.0, 0.0);
 
         let mouse_sensitivity = 0.003;
@@ -620,20 +625,25 @@ fn main() {
 
             // Handle keyboard input
             if let Ok(keys) = pressed_keys.lock() {
+                
+                let rotation =  camera_node.rotation.clone();
+                
+
                 for key in keys.iter() {
                     // if key is pressed, move the camera
 
 
 
                     match key {
+                        
 
 
-                        VirtualKeyCode::W => camera_position += speed * camera_front,  // Move forward
-                        VirtualKeyCode::S => camera_position -= speed * camera_front,  // Move backward
-                        VirtualKeyCode::A => camera_position -= glm::normalize(&glm::cross(&camera_front, &camera_up)) * speed,   // Move left
-                        VirtualKeyCode::D => camera_position += glm::normalize(&glm::cross(&camera_front, &camera_up)) * speed,  // Move right
-                        VirtualKeyCode::Space => camera_position[1] += speed,  // Move up
-                        VirtualKeyCode::LShift => camera_position[1] -= speed,  // Move down
+                        VirtualKeyCode::W => camera_node.position += speed * rotation,  // Move forward
+                        VirtualKeyCode::S => camera_node.position -= speed * rotation,  // Move backward
+                        VirtualKeyCode::A => camera_node.position -= glm::normalize(&glm::cross(&rotation, &camera_up)) * speed,   // Move left
+                        VirtualKeyCode::D => camera_node.position += glm::normalize(&glm::cross(&rotation, &camera_up)) * speed,  // Move right
+                        VirtualKeyCode::Space => camera_node.position[1] += speed,  // Move up
+                        VirtualKeyCode::LShift => camera_node.position[1] -= speed,  // Move down
                         
                         // Rotation
                         VirtualKeyCode::Up => pitch += rotation_speed*0.1,  // Rotate up (around X-axis)
@@ -692,14 +702,14 @@ _ => { }
                 pitch.sin(),
                 yaw.sin() * pitch.cos()
             );
-            camera_front = glm::normalize(&front);
+            camera_node.rotation = glm::normalize(&front);
 
             
 
             // Compute the view matrix
             let view = glm::look_at(
-                &camera_position,
-                &(camera_position + camera_front),
+                &camera_node.position,
+                &(camera_node.position + camera_node.rotation),
                 &camera_up
             );
 
