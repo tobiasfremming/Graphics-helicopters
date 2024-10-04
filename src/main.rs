@@ -247,9 +247,7 @@ unsafe fn draw_scene(
         // Move back by reference point
         transformation_matrix = glm::translate(&transformation_matrix, &-node.reference_point);
         transformation_matrix = glm::translate(&transformation_matrix, &node.position);
-        if node.is_helicopter {
-            dbg!(node.position);
-        }
+       
 
         // Combine with the transformation so far
         let updated_transformation = transformation_so_far * transformation_matrix;
