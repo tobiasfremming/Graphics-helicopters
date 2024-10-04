@@ -233,21 +233,23 @@ unsafe fn draw_scene(
 
     
         // Apply node's transformations
-        transformation_matrix = glm::translate(&transformation_matrix, &node.position);
         transformation_matrix = glm::translate(&transformation_matrix, &node.reference_point);
-    
+        // transformation_matrix = glm::translate(&transformation_matrix, &node.position);
+        
         // Apply rotations
         transformation_matrix = glm::rotate(&transformation_matrix, node.rotation[0], &glm::vec3(1.0, 0.0, 0.0));
         transformation_matrix = glm::rotate(&transformation_matrix, node.rotation[1], &glm::vec3(0.0, 1.0, 0.0));
         transformation_matrix = glm::rotate(&transformation_matrix, node.rotation[2], &glm::vec3(0.0, 0.0, 1.0));
-    
+        
         // Apply scaling
         transformation_matrix = glm::scale(&transformation_matrix, &node.scale);
-    
-        // Move back by reference point if necessary
+        
+        // Move back by reference point
         transformation_matrix = glm::translate(&transformation_matrix, &-node.reference_point);
-        transformation_matrix = glm::translate(&transformation_matrix, &-&node.position);
-    
+        transformation_matrix = glm::translate(&transformation_matrix, &node.position);
+        if node.is_helicopter {
+            dbg!(node.position);
+        }
 
         // Combine with the transformation so far
         let updated_transformation = transformation_so_far * transformation_matrix;
@@ -381,15 +383,9 @@ fn main() {
 
         let my_vao = unsafe { 1337 };
 
-
-        // == // Set up your shaders here
-
-        // Basic usage of shader helper:
-        // The example code below creates a 'shader' object.
-        // It which contains the field `.program_id` and the method `.activate()`.
-        // The `.` in the path is relative to `Cargo.toml`.
-        // This snippet is not enough to do the exercise, and will need to be modified (outside
-        // of just using the correct path), but it only needs to be called once
+        // ---------------------------------
+        // Load your shader program
+        // ---------------------------------
 
         let shader_program = unsafe {
             shader::ShaderBuilder::new()
@@ -403,19 +399,10 @@ fn main() {
             shader_program.activate();
         }
 
-    
-
-        // load the terrain
-        // let terrain: Mesh = mesh::Terrain::load("./resources/lunarsurface.obj");
-        // let vertices: Vec<f32> = terrain.vertices;
-        // let terrain_indices: Vec<u32> = terrain.indices;
-        // let colors: Vec<f32> = terrain.colors;
-        // let normals: Vec<f32> = terrain.normals;
-
-        // // Create the VAO
-        // let terrain_vao: u32 = unsafe {
-        //     create_vao(&vertices, &terrain_indices, &colors, &normals)
-        // };
+ 
+        // ---------------------------------    
+        // Load mesh from file
+        //---------------------------------
         let (terrain_vao, terrain_indices_lenght) = unsafe { get_vao_from_mesh("./resources/lunarsurface.obj") };
         
 
@@ -463,6 +450,9 @@ fn main() {
             create_vao(&vertices, &tail_rotor_indices, &colors, &normals)
         };
 
+        // ---------------------------------    
+        // Create nodes
+        //---------------------------------
 
         let mut root_node: Node = SceneNode::new();
         let mut terrain_node: Node = SceneNode::from_vao(terrain_vao, terrain_indices_lenght as i32);
@@ -479,10 +469,10 @@ fn main() {
 
         // loop through a number of helicopters to create them. 
 
-        for i in 0..5 {
+        for i in 0..6 {
 
             
-            let mut aniamtion_node: Node = SceneNode::new();
+            
             
             let mut helicopter_body_node: Node = SceneNode::from_vao(helicopter_body_Vao, body_indices.len() as i32);
             let mut helicopter_door_node: Node = SceneNode::from_vao(helicopter_door_Vao, door_indices.len() as i32);
@@ -495,7 +485,7 @@ fn main() {
             helicopter_door_node.is_helicopter = true;
             helicopter_main_rotor_node.position = glm::vec3(0.0, 0.0, 0.0);
             helicopter_main_rotor_node.is_helicopter = true;
-            helicopter_tail_rotor_node.position = glm::vec3(0.35, 2.3, 10.4);
+            helicopter_tail_rotor_node.reference_point = glm::vec3(0.35, 2.3, 10.4);
             helicopter_tail_rotor_node.is_helicopter = true;
 
             helicopter_body_node.rotation = glm::vec3(0.0, 0.0, 0.0); // rotation around y axis
@@ -503,27 +493,12 @@ fn main() {
             helicopter_main_rotor_node.rotation = glm::vec3(0.0, 0.1, 0.0);
             helicopter_tail_rotor_node.rotation = glm::vec3(0.1, 0.0, 0.0);
 
-
             
             helicopter_body_node.add_child(&helicopter_door_node);
             helicopter_body_node.add_child(&helicopter_main_rotor_node);
             helicopter_body_node.add_child(&helicopter_tail_rotor_node);
             
             
-            aniamtion_node.position = glm::vec3(100.0, 500.0, 100.0);
-            aniamtion_node.add_child(&helicopter_body_node);
-            terrain_node.add_child(&aniamtion_node);
-
-            
-            
-            terrain_node.add_child(&aniamtion_node);
-            aniamtion_nodes.push(aniamtion_node);
-            
-            
-            
-            
-            
-
             
             helicopter_body_nodes.push(helicopter_body_node);
             helicopter_door_nodes.push(helicopter_door_node);
@@ -532,7 +507,23 @@ fn main() {
 
 
         }
+        
+
+
+        for i in 0..5 {
+            let mut aniamtion_node: Node = SceneNode::new();
+            aniamtion_node.position = glm::vec3(100.0, 500.0, 100.0);
+            aniamtion_node.add_child(&helicopter_body_nodes[i]);
+            terrain_node.add_child(&aniamtion_node);
+            aniamtion_nodes.push(aniamtion_node);
+
+        };
         root_node.add_child(&terrain_node);
+
+
+        // ---------------------------------    
+        // Set up camera
+        //---------------------------------
 
         let mut camera_node: Node = SceneNode::new();
         camera_node.position = glm::vec3(0.0, 0.0, 0.0);
@@ -540,29 +531,30 @@ fn main() {
         terrain_node.add_child(&camera_node);
 
         
-
-
-        
-
-        
-
         let mut pitch: f32 = 0.0; // rotation around x-axis
         let mut yaw: f32 = -90.0_f32.to_radians(); // rotation around y-axis
         let mut roll:f32  = 0.0; // rotation around z-axis
 
         
-        let mut camera_position:Vec3 = glm::vec3(0.0, 0.0, 0.0);
-        //let mut camera_front: Vec3 = glm::vec3(0.0, 0.0, -1.0);
         let camera_up = glm::vec3(0.0, 1.0, 0.0);
 
         let mouse_sensitivity = 0.003;
         let mut mouse_enabled = true;
 
+        // ---------------------------------
+        // Set up controllable helicopter
+        // ---------------------------------
 
+        let mut controllable_helicopter_node: Node = SceneNode::new();
+        controllable_helicopter_node.add_child(&helicopter_body_nodes[5]);
+        terrain_node.add_child(&controllable_helicopter_node);
+        controllable_helicopter_node.position = glm::vec3(0.0, 0.0, 0.0);
 
-        // Used to demonstrate keyboard handling for exercise 2.
-        let mut _arbitrary_number = 0.0; // feel free to remove
+        let mut controllable_pitch: f32 = 0.0;
+        let mut controllable_yaw: f32 = 0.0;
+        let mut controllable_roll: f32 = 0.0;
 
+        
 
         // The main rendering loop
         let first_frame_time = std::time::Instant::now();
@@ -575,6 +567,10 @@ fn main() {
             previous_frame_time = now;
 
 
+
+            // ---------------------------------
+            // Animations
+            // ---------------------------------
             let rotor_rotation_speed = 10.0; 
             let helicopter_animation_offset: f32 = 2.0;
 
@@ -585,11 +581,7 @@ fn main() {
             }
 
             
-            
-            
-            
-            
-            for i in 1..aniamtion_nodes.len() {
+            for i in 0..aniamtion_nodes.len() {
                 
                 let animation: Heading = toolbox::simple_heading_animation(elapsed + (i as f32)*helicopter_animation_offset as f32);
                 aniamtion_nodes[i].position = glm::vec3(animation.x,  aniamtion_nodes[i].position.y, animation.z);
@@ -627,6 +619,7 @@ fn main() {
             if let Ok(keys) = pressed_keys.lock() {
                 
                 let rotation =  camera_node.rotation.clone();
+                let controllable_rotation = controllable_helicopter_node.rotation.clone();
                 
 
                 for key in keys.iter() {
@@ -635,6 +628,13 @@ fn main() {
 
 
                     match key {
+
+                        VirtualKeyCode::T => controllable_helicopter_node.position += speed * controllable_rotation,  // Move forward
+                        VirtualKeyCode::G => controllable_helicopter_node.position -= speed * controllable_rotation,  // Move backward
+                        VirtualKeyCode::F => controllable_helicopter_node.position -= glm::normalize(&glm::cross(&controllable_rotation, &camera_up)) * speed,   // Move left
+                        VirtualKeyCode::H => controllable_helicopter_node.position += glm::normalize(&glm::cross(&controllable_rotation, &camera_up)) * speed,  // Move right
+                        VirtualKeyCode::Y => controllable_helicopter_node.position[1] += speed,  // Move up
+                        VirtualKeyCode::B => controllable_helicopter_node.position[1] -= speed,  // Move down
                         
 
 
@@ -646,10 +646,10 @@ fn main() {
                         VirtualKeyCode::LShift => camera_node.position[1] -= speed,  // Move down
                         
                         // Rotation
-                        VirtualKeyCode::Up => pitch += rotation_speed*0.1,  // Rotate up (around X-axis)
-                        VirtualKeyCode::Down => pitch -= rotation_speed*0.1,  // Rotate down (around X-axis)
-                        VirtualKeyCode::Left => yaw -= rotation_speed,  // Rotate left (around Y-axis)
-                        VirtualKeyCode::Right => yaw += rotation_speed,  // Rotate right (around Y-axis)
+                        VirtualKeyCode::Up => controllable_pitch += rotation_speed,  // Rotate up (around X-axis)
+                        VirtualKeyCode::Down => controllable_pitch -= rotation_speed,  // Rotate down (around X-axis)
+                        VirtualKeyCode::Left => controllable_yaw -= rotation_speed,  // Rotate left (around Y-axis)
+                        VirtualKeyCode::Right => controllable_yaw += rotation_speed,  // Rotate right (around Y-axis)
                         // The `VirtualKeyCode` enum is defined here:
                         //    https://docs.rs/winit/0.25.0/winit/event/enum.VirtualKeyCode.html
 
@@ -704,7 +704,12 @@ _ => { }
             );
             camera_node.rotation = glm::normalize(&front);
 
+
+            controllable_helicopter_node.rotation[2] = controllable_roll;
+            controllable_helicopter_node.rotation[1] = controllable_yaw;
+            controllable_helicopter_node.rotation[0] = controllable_pitch;
             
+    
 
             // Compute the view matrix
             let view = glm::look_at(
@@ -767,11 +772,7 @@ _ => { }
     });
 
 
-    // == //
-    // == // From here on down there are only internals.
-    // == //
-
-
+  
     // Keep track of the health of the rendering thread
     let render_thread_healthy = Arc::new(RwLock::new(true));
     let render_thread_watchdog = Arc::clone(&render_thread_healthy);
