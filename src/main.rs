@@ -495,7 +495,7 @@ fn main() {
             helicopter_door_node.is_helicopter = true;
             helicopter_main_rotor_node.position = glm::vec3(0.0, 0.0, 0.0);
             helicopter_main_rotor_node.is_helicopter = true;
-            helicopter_tail_rotor_node.position = glm::vec3(0.35, 2.3, 10.4);
+            helicopter_tail_rotor_node.reference_point = glm::vec3(0.35, 2.3, 10.4);
             helicopter_tail_rotor_node.is_helicopter = true;
 
             helicopter_body_node.rotation = glm::vec3(0.0, 0.0, 0.0); // rotation around y axis
