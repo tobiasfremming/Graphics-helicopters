@@ -745,7 +745,8 @@ _ => { }
                 // Pass the 'elapsed_time' to the 'time' uniform in the shader
                 //let time_uniform_location = gl::GetUniformLocation(shader_program.program_id, "time".as_ptr() as *const i8);
                 gl::Uniform1f(1, elapsed);
-
+                let uniform_cam_pos_location = gl::GetUniformLocation(shader_program.program_id, "camera_position\0".as_ptr() as *const i8);
+                gl::Uniform3fv(uniform_cam_pos_location, 1, camera_node.position.as_ptr());
                 
                 
           
