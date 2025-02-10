@@ -10,18 +10,26 @@
 extern crate nalgebra_glm as glm;
 use std::option::Iter;
 use std::{ mem, ptr, os::raw::c_void };
-use std::thread;
+use glutin::window::CursorGrabMode;
+use std::{path, thread};
 use std::sync::{Mutex, Arc, RwLock};
 use std::time::Instant;
 
 
+
 mod shader;
 mod util;
+mod mesh;
+mod scene_graph;
+mod toolbox;
 
-use glm::{normalize_dot, Mat4, Vec3};
+use glm::{normalize_dot, Mat3, Mat4, Vec3};
 use glutin::event::ElementState;
 use glutin::event::{Event, WindowEvent, DeviceEvent, KeyboardInput, ElementState::{Pressed, Released}, VirtualKeyCode::{self, *}};
 use glutin::event_loop::ControlFlow;
+use mesh::{Helicopter, Mesh};
+use scene_graph::{Node, SceneNode};
+use toolbox::Heading;
 
 
 
@@ -76,30 +84,15 @@ fn offset<T>(n: u32) -> *const c_void {
 // ptr::null()
 
 
+
+
 // == // Generate your VAO here
-unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f32>) -> u32 {
-    
-
-    // Also, feel free to delete comments :)
-
-    // This should:
-    // * Generate a VAO and bind it
-    // * Generate a VBO and bind it
-    // * Fill it with data
-    // * Configure a VAP for the data and enable it
-    // * Generate a IBO and bind it
-    // * Fill it with data
-    // * Return the ID of the VAO
+unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f32>, normals: &Vec<f32>) -> u32 {
 
     // Generate the VAO
     let mut vao: u32 = 0;
     gl::GenVertexArrays(1, &mut vao);
     gl::BindVertexArray(vao);
-    
-
-    
-
-    
     
     
 
@@ -158,13 +151,31 @@ unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f32>)
         4 * std::mem::size_of::<f32>() as i32, // stride: 4 floats per color
         ptr::null(),
     );
-    
 
-    // Enable the VAP
-    
     gl::EnableVertexAttribArray(1);
 
+    // Generate the VBO for the normals
+    let mut normal_vbo: u32 = 0;
+    gl::GenBuffers(1, &mut normal_vbo);
+    gl::BindBuffer(gl::ARRAY_BUFFER, normal_vbo);
+    gl::BufferData(
+        gl::ARRAY_BUFFER,
+        (normals.len() * std::mem::size_of::<f32>()) as isize,
+        normals.as_ptr() as *const c_void,
+        gl::STATIC_DRAW,
+    );
 
+    gl::VertexAttribPointer(
+        2,
+        3,                  // x,y,z components per normal
+        gl::FLOAT,
+        gl::FALSE,
+        3 * std::mem::size_of::<f32>() as i32, // stride: 3 floats per normal
+        ptr::null(),
+    );
+
+    gl::EnableVertexAttribArray(2);
+        
     vao
 
 
@@ -186,98 +197,106 @@ fn create_square(uv: f32, offset_x: f32, offset_y: f32, offset_z: f32) -> Vec<f3
     vertices
 }
 
-fn create_box(
-    start_point: (f32, f32, f32), 
-    width: f32, 
-    height: f32, 
-    depth: f32
-) -> Vec<f32> {
-    let (x, y, z) = start_point;
-    let point0 = [x, y, z];
-    let point1 = [x + width, y, z];
-    let point2 = [x, y + height, z];
-    let point3 = [x + width, y + height, z];
-    let point4 = [x, y, z - depth];
-    let point5 = [x + width, y, z - depth];
-    let point6 = [x, y + height, z - depth];
-    let point7 = [x + width, y + height, z - depth];
-    
-
-    let mut vertices: Vec<f32> = Vec::new();
-
-    vertices.extend_from_slice(&point0);
-    vertices.extend_from_slice(&point1);
-    vertices.extend_from_slice(&point2);
-
-    vertices.extend_from_slice(&point1);
-    vertices.extend_from_slice(&point3);
-    vertices.extend_from_slice(&point2);
-
-
-    vertices.extend_from_slice(&point1);
-    vertices.extend_from_slice(&point5);
-    vertices.extend_from_slice(&point3);
-
-    vertices.extend_from_slice(&point5);
-    vertices.extend_from_slice(&point7);
-    vertices.extend_from_slice(&point3);
-
-
-    vertices.extend_from_slice(&point5);
-    vertices.extend_from_slice(&point4);
-    vertices.extend_from_slice(&point7);
-
-    vertices.extend_from_slice(&point4);
-    vertices.extend_from_slice(&point6);
-    vertices.extend_from_slice(&point7);
-
-
-    vertices.extend_from_slice(&point4);
-    vertices.extend_from_slice(&point0);
-    vertices.extend_from_slice(&point6);
-
-    vertices.extend_from_slice(&point0);
-    vertices.extend_from_slice(&point2);
-    vertices.extend_from_slice(&point6);
-
-
-    vertices.extend_from_slice(&point6);
-    vertices.extend_from_slice(&point7);
-    vertices.extend_from_slice(&point2);
-
-    vertices.extend_from_slice(&point7);
-    vertices.extend_from_slice(&point3);
-    vertices.extend_from_slice(&point2);
-
-
-    vertices.extend_from_slice(&point4);
-    vertices.extend_from_slice(&point5);
-    vertices.extend_from_slice(&point0);
-
-    vertices.extend_from_slice(&point5);
-    vertices.extend_from_slice(&point1);
-    vertices.extend_from_slice(&point0);
-
-
-    vertices.extend_from_slice(&point2);
-    vertices.extend_from_slice(&point3);
-    vertices.extend_from_slice(&point6);
-
-    vertices.extend_from_slice(&point3);
-    vertices.extend_from_slice(&point7);
-    vertices.extend_from_slice(&point6);
 
 
 
 
+unsafe fn get_vao_from_mesh(path: &str ) -> (u32, u32){
+    // Load the texture, and create the vao
+    let model: Mesh = mesh::Terrain::load(path);
+        let vertices: Vec<f32> = model.vertices;
+        let indices: Vec<u32> = model.indices;
+        let colors: Vec<f32> = model.colors;
+        let normals: Vec<f32> = model.normals;
 
+        // Create the VAO
+        let vao: u32 =create_vao(&vertices, &indices, &colors, &normals);
+        
 
+        (vao, indices.len() as u32)
 
-    vertices
 }
 
 
 
+
+
+
+unsafe fn draw_scene(
+        node: &scene_graph::SceneNode,
+        view_projection_matrix: &glm::Mat4,
+        transformation_so_far: &glm::Mat4,
+        shader_program_id: u32,
+    ) {
+        // Compute the transformation matrix for the current node
+        let mut transformation_matrix = glm::identity();
+
+    
+        // Apply node's transformations
+        transformation_matrix = glm::translate(&transformation_matrix, &node.position);
+        transformation_matrix = glm::translate(&transformation_matrix, &node.reference_point);
+    
+        // Apply rotations
+        transformation_matrix = glm::rotate(&transformation_matrix, node.rotation[0], &glm::vec3(1.0, 0.0, 0.0));
+        transformation_matrix = glm::rotate(&transformation_matrix, node.rotation[1], &glm::vec3(0.0, 1.0, 0.0));
+        transformation_matrix = glm::rotate(&transformation_matrix, node.rotation[2], &glm::vec3(0.0, 0.0, 1.0));
+    
+        // Apply scaling
+        transformation_matrix = glm::scale(&transformation_matrix, &node.scale);
+    
+        // Move back by reference point if necessary
+        transformation_matrix = glm::translate(&transformation_matrix, &-node.reference_point);
+        transformation_matrix = glm::translate(&transformation_matrix, &-&node.position);
+    
+
+        // Combine with the transformation so far
+        let updated_transformation = transformation_so_far * transformation_matrix;
+        let mixed_matrix = view_projection_matrix * updated_transformation;
+        let normal_matrix: Mat3 = updated_transformation.fixed_slice::<3, 3>(0, 0).into();
+        // Pass matrices to the shader
+        let transformation_so_far_location = gl::GetUniformLocation(
+            shader_program_id,
+            "transformation_so_far\0".as_ptr() as *const i8,
+        );
+        gl::UniformMatrix3fv(
+            transformation_so_far_location,
+            1,
+            gl::FALSE,
+            normal_matrix.as_ptr(),
+        );
+    
+        let view_projection_matrix_location = gl::GetUniformLocation(
+            shader_program_id,
+            "view_projection_matrix\0".as_ptr() as *const i8,
+        );
+        gl::UniformMatrix4fv(
+            view_projection_matrix_location,
+            1,
+            gl::FALSE,
+            mixed_matrix.as_ptr(),
+        );
+        gl::Uniform1i(2, node.is_helicopter as i32);
+    
+        // Draw the node if it's drawable
+        if node.index_count != -1 {
+            gl::BindVertexArray(node.vao_id);
+            gl::DrawElements(
+                gl::TRIANGLES,
+                node.index_count,
+                gl::UNSIGNED_INT,
+                std::ptr::null(),
+            );
+        }
+    
+        // Recurse with the updated transformation
+        for &child in &node.children {
+            draw_scene(&*child, view_projection_matrix, &updated_transformation, shader_program_id);
+        }
+    }
+    
+
+
+    
 
 fn main() {
     // Set up the necessary objects to deal with windows and event handling
@@ -293,8 +312,21 @@ fn main() {
         .with_vsync(true);
     let windowed_context = cb.build_windowed(wb, &el).unwrap();
     // Uncomment these if you want to use the mouse for controls, but want it to be confined to the screen and/or invisible.
-    // windowed_context.window().set_cursor_grab(true).expect("failed to grab cursor");
-    // windowed_context.window().set_cursor_visible(false);
+    
+    windowed_context.window().set_fullscreen(Some(glutin::window::Fullscreen::Borderless(windowed_context.window().current_monitor())));
+    windowed_context.window().set_cursor_grab(CursorGrabMode::Confined).expect("failed to grab cursor");
+    windowed_context.window().set_cursor_visible(false);
+
+    // if unsafe{mouse_enabled}{
+    //     windowed_context.window().set_cursor_grab(CursorGrabMode::Confined).expect("failed to grab cursor");
+    //     windowed_context.window().set_cursor_visible(false);
+    // }
+    // else {
+    //     windowed_context.window().set_cursor_grab(CursorGrabMode::None).expect("failed to grab cursor");
+    //     windowed_context.window().set_cursor_visible(false);
+    // }
+    
+    
 
     // Set up a shared vector for keeping track of currently pressed keys
     let arc_pressed_keys = Arc::new(Mutex::new(Vec::<VirtualKeyCode>::with_capacity(10)));
@@ -321,6 +353,7 @@ fn main() {
             gl::load_with(|symbol| c.get_proc_address(symbol) as *const _);
             c
         };
+        
 
         let mut window_aspect_ratio = INITIAL_SCREEN_W as f32 / INITIAL_SCREEN_H as f32;
 
@@ -370,237 +403,123 @@ fn main() {
             shader_program.activate();
         }
 
-        /*
-        let simple_shader = unsafe {
-            shader::ShaderBuilder::new()
-                .attach_file("./path/to/simple/shader.file")
-                .link()
-        };
-        */
+    
 
-        // let vertices: Vec<f32> = vec![
-        //     // Triangle 1 
-        //     -0.8,  0.5, 0.0,   // Top left
-        //     -0.5,  0.5, 0.0,   // Top right
-        //     -0.8,  1.0, 0.0,   // Bottom left
-        //     // -0.2, -0.4, -0.2,   // Bottom left 
-        //     // -0.3, -1.0, 0.0,    // Bottom right 
-        //     // 0.1, -0.5, 0.0,    // Top left 
+        // load the terrain
+        // let terrain: Mesh = mesh::Terrain::load("./resources/lunarsurface.obj");
+        // let vertices: Vec<f32> = terrain.vertices;
+        // let terrain_indices: Vec<u32> = terrain.indices;
+        // let colors: Vec<f32> = terrain.colors;
+        // let normals: Vec<f32> = terrain.normals;
 
-        //     // Triangle 2
-        //     -0.1, -0.4, -0.1,   // Bottom left 
-        //     -0.2, -1.0, -0.1,    // Bottom right 
-        //     0.1, -0.5, -0.1,    // Top left 
-
-        //     // Triangle 3 
-        //     -0.8, -0.8, -1.0,   // Bottom left
-        //     -0.5, -1.0, -1.0,   // Bottom right
-        //     -0.2, -0.5, -1.0,   // Top left
-
-        //     // Triangle 4 
-        //     0.7, -0.7, 0.0,    // Bottom far right
-        //     0.7, -0.3, 0.0,    // Bottom right
-        //     0.4, -0.5, 0.0,    // Far bottom right
-
-        //     // Triangle 5 
-        //     0.0, 0.1, 0.0,     // Center
-        //     0.4, 0.1, 0.0,     // Right of center
-        //     0.2, 0.5, 0.0,     // Above center
-        // ];
-        let  vertices: Vec<f32> = create_box((-0.5, -0.5, -0.5), 1.0, 1.0, 1.0);
-        // let mut vertices: Vec<f32> = vec![];
-
-        //let billboard_vertices: Vec<f32> = create_square(0.1, 0.0, 0.0, 0.0);
-        let mut billboard_vertices: Vec<f32> = vec![];
-        let point0 = [-1.0, -1.0, -2.0];
-        let point1 = [1.0, -1.0, -2.0];
-        let point2 = [-1.0, 1.0, -2.0];
-        let point3 = [1.0, 1.0, -2.0];
-
-        billboard_vertices.extend_from_slice(&point0);
-        billboard_vertices.extend_from_slice(&point1);
-        billboard_vertices.extend_from_slice(&point2);
-
-        billboard_vertices.extend_from_slice(&point1);
-        billboard_vertices.extend_from_slice(&point3);
-        billboard_vertices.extend_from_slice(&point2);
+        // // Create the VAO
+        // let terrain_vao: u32 = unsafe {
+        //     create_vao(&vertices, &terrain_indices, &colors, &normals)
+        // };
+        let (terrain_vao, terrain_indices_lenght) = unsafe { get_vao_from_mesh("./resources/lunarsurface.obj") };
+        
 
 
-        let indices: Vec<u32> = vec![
-            0, 1, 2,  // Triangle 1
-            3, 4, 5,  // Triangle 2
-            6, 7, 8,  // Triangle 3
-            9, 10, 11, // Triangle 4
-            12, 13, 14, // Triangle 5
-            15, 16, 17, // Triangle 6
-            18, 19, 20, // Triangle 7
-            21, 22, 23, // Triangle 8
-            24, 25, 26, // Triangle 9
-            27, 28, 29, // Triangle 10
-            30, 31, 32, // Triangle 11
-            33, 34, 35, // Triangle 12
-            36, 37, 38, // Triangle 13
-            39, 40, 41, // Triangle 14
-            42, 43, 44, // Triangle 15
-            45, 46, 47, // Triangle 16
-            48, 49, 50, // Triangle 17
-            51, 52, 53, // Triangle 18
-            54, 55, 56, // Triangle 19
-            57, 58, 59, // Triangle 20
-            60, 61, 62, // Triangle 21
-            63, 64, 65, // Triangle 22
-            66, 67, 68, // Triangle 23
-            69, 70, 71, // Triangle 24
+        // load the helicopter
+        let helicopter: Helicopter = mesh::Helicopter::load("./resources/helicopter.obj");
+        let mut body: Mesh = helicopter.body;
+        let vertices: Vec<f32> = body.vertices;
+        let body_indices: Vec<u32> = body.indices;
+        let colors: Vec<f32> = body.colors;
+        let normals: Vec<f32> = body.normals;
+        
 
-        ];
-
-        let colors: Vec<f32> = vec![
-            
-
-
-            // 0.0, 1.0, 0.0, 0.5, // Green
-            // 0.2, 0.8, 0.0, 0.5, // Yellowish Green
-            // 0.0, 0.6, 0.2, 0.5, // Blueish Green
-
-            // 1.0, 0.0, 0.0, 0.5, // Red
-            // 1.0, 0.3, 0.0, 0.5, // Orange
-            // 0.8, 0.0, 0.2, 0.5, // Reddish Purple
-            
-            // 0.0, 0.0, 1.0, 0.5, // Blue
-            // 0.2, 0.2, 1.0, 0.5, // Light Blue
-            // 0.0, 0.2, 0.8, 0.5, // Blueish Cyan
-
-            // 1.0, 1.0, 0.0, 1.0, // Yellow
-            // 1.0, 0.8, 0.2, 1.0, // Yellowish Orange
-            // 0.8, 1.0, 0.2, 1.0, // Greenish Yellow
-
-            // 0.0, 1.0, 1.0, 1.0, // Cyan
-            // 0.2, 0.8, 1.0, 1.0, // Light Blue Cyan
-            // 0.0, 1.0, 0.8, 1.0, // Greenish Cyan
-
-            1.0, 1.0, 0.0, 1.0, // Yellow 0
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            1.0, 0.0, 0.0, 1.0, // Green  2
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            0.0, 0.0, 1.0, 1.0, // Blue   3
-            1.0, 0.0, 0.0, 1.0, // Green  2
-
-            1.0, 1.0, 0.0, 1.0, // Yellow 0
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            1.0, 0.0, 0.0, 1.0, // Green  2
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            0.0, 0.0, 1.0, 1.0, // Blue   3
-            1.0, 0.0, 0.0, 1.0, // Green  2
-
-            1.0, 1.0, 0.0, 1.0, // Yellow 0
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            1.0, 0.0, 0.0, 1.0, // Green  2
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            0.0, 0.0, 1.0, 1.0, // Blue   3
-            1.0, 0.0, 0.0, 1.0, // Green  2
-
-            1.0, 1.0, 0.0, 1.0, // Yellow 0
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            1.0, 0.0, 0.0, 1.0, // Green  2
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            0.0, 0.0, 1.0, 1.0, // Blue   3
-            1.0, 0.0, 0.0, 1.0, // Green  2
-
-            1.0, 1.0, 0.0, 1.0, // Yellow 0
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            1.0, 0.0, 0.0, 1.0, // Green  2
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            0.0, 0.0, 1.0, 1.0, // Blue   3
-            1.0, 0.0, 0.0, 1.0, // Green  2
-
-            1.0, 1.0, 0.0, 1.0, // Yellow 0
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            1.0, 0.0, 0.0, 1.0, // Green  2
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            0.0, 0.0, 1.0, 1.0, // Blue   3
-            1.0, 0.0, 0.0, 1.0, // Green  2
-
-            1.0, 1.0, 0.0, 1.0, // Yellow 0
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            1.0, 0.0, 0.0, 1.0, // Green  2
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            0.0, 0.0, 1.0, 1.0, // Blue   3
-            1.0, 0.0, 0.0, 1.0, // Green  2
-
-            1.0, 1.0, 0.0, 1.0, // Yellow 0
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            1.0, 0.0, 0.0, 1.0, // Green  2
-            0.0, 1.0, 1.0, 1.0, // Cyan   1
-            0.0, 0.0, 1.0, 1.0, // Blue   3
-            1.0, 0.0, 0.0, 1.0, // Green  2
-
-            
-
-
-            
-
-
-            
-            0.0, 1.0, 0.0, 1.0, // Green
-            0.0, 0.0, 1.0, 1.0, // Blue
-            1.0, 1.0, 0.0, 1.0, // Yellow
-            0.0, 1.0, 1.0, 1.0, // Cyan
-            1.0, 1.0, 0.0, 1.0, // Yellow
-            0.0, 1.0, 1.0, 1.0, // Cyan
-            1.0, 0.0, 0.0, 1.0, // Red
-            0.0, 1.0, 0.0, 1.0, // Green
-            0.0, 0.0, 1.0, 1.0, // Blue
-            1.0, 1.0, 0.0, 1.0, // Yellow
-            0.0, 1.0, 1.0, 1.0, // Cyan
-            1.0, 1.0, 0.0, 1.0, // Yellow
-            0.0, 1.0, 1.0, 1.0, // Cyan
-            1.0, 0.0, 0.0, 1.0, // Red
-            0.0, 1.0, 0.0, 1.0, // Green
-            0.0, 0.0, 1.0, 1.0, // Blue
-            1.0, 1.0, 0.0, 1.0, // Yellow
-            0.0, 1.0, 1.0, 1.0, // Cyan
-            1.0, 0.0, 0.0, 1.0, // Red
-            0.0, 1.0, 0.0, 1.0, // Green
-            0.0, 0.0, 1.0, 1.0, // Blue
-            1.0, 1.0, 0.0, 1.0, // Yellow
-            0.0, 1.0, 1.0, 1.0, // Cyan
-            1.0, 0.0, 0.0, 1.0, // Red
-            0.0, 1.0, 0.0, 1.0, // Green
-            0.0, 0.0, 1.0, 1.0, // Blue
-            1.0, 1.0, 0.0, 1.0, // Yellow
-            0.0, 1.0, 1.0, 1.0, // Cyan
-
-
-            
-        ];
-        // Create the VAO
-        let vao = unsafe {
-            create_vao(&vertices, &indices, &colors)
+        let helicopter_body_Vao: u32 = unsafe {
+            create_vao(&vertices, &body_indices, &colors, &normals)
         };
 
-        // Draw the VAO
-        unsafe {
-            gl::BindVertexArray(vao);
-            gl::DrawElements(
-                gl::TRIANGLES,
-                indices.len() as i32,
-                gl::UNSIGNED_INT,
-                std::ptr::null()
-            );
-        }
+        let mut helicopter_door: Mesh = helicopter.door;
+        let vertices: Vec<f32> = helicopter_door.vertices;
+        let door_indices: Vec<u32> = helicopter_door.indices;
+        let colors: Vec<f32> = helicopter_door.colors;
+        let normals: Vec<f32> = helicopter_door.normals;
+
+        let helicopter_door_Vao: u32 = unsafe {
+            create_vao(&vertices, &door_indices, &colors, &normals)
+        };
+
+        let mut helicopter_main_rotor: Mesh = helicopter.main_rotor;
+        let vertices: Vec<f32> = helicopter_main_rotor.vertices;
+        let main_rotor_indices: Vec<u32> = helicopter_main_rotor.indices;
+        let colors: Vec<f32> = helicopter_main_rotor.colors;
+        let normals: Vec<f32> = helicopter_main_rotor.normals;
+
+        let helicopter_main_rotor_Vao: u32 = unsafe {
+            create_vao(&vertices, &main_rotor_indices, &colors, &normals)
+        };
+
+        let mut helicopter_tail_rotor: Mesh = helicopter.tail_rotor;
+        let vertices: Vec<f32> = helicopter_tail_rotor.vertices;
+        let tail_rotor_indices: Vec<u32> = helicopter_tail_rotor.indices;
+        let colors: Vec<f32> = helicopter_tail_rotor.colors;
+        let normals: Vec<f32> = helicopter_tail_rotor.normals;
+
+        let helicopter_tail_rotor_Vao: u32 = unsafe {
+            create_vao(&vertices, &tail_rotor_indices, &colors, &normals)
+        };
+
+
+        let mut root_node: Node = SceneNode::new();
+        let mut terrain_node: Node = SceneNode::from_vao(terrain_vao, terrain_indices_lenght as i32);
+        let mut helicopter_body_node: Node = SceneNode::from_vao(helicopter_body_Vao, body_indices.len() as i32);
+        let mut helicopter_door_node: Node = SceneNode::from_vao(helicopter_door_Vao, door_indices.len() as i32);
+        let mut helicopter_main_rotor_node: Node = SceneNode::from_vao(helicopter_main_rotor_Vao, main_rotor_indices.len() as i32);
+        let mut helicopter_tail_rotor_node: Node = SceneNode::from_vao(helicopter_tail_rotor_Vao, tail_rotor_indices.len() as i32);
+
+        let mut helicopter_body_node2: Node = SceneNode::from_vao(helicopter_body_Vao, body_indices.len() as i32);
+        let mut helicopter_door_node2: Node = SceneNode::from_vao(helicopter_door_Vao, door_indices.len() as i32);
+        let mut helicopter_main_rotor_node2: Node = SceneNode::from_vao(helicopter_main_rotor_Vao, main_rotor_indices.len() as i32);
+        let mut helicopter_tail_rotor_node2: Node = SceneNode::from_vao(helicopter_tail_rotor_Vao, tail_rotor_indices.len() as i32);
+
         
-        // set up camera
-        //let mut camera_motion = CameraMotion::new();
+
+        terrain_node.position = glm::vec3(0.0, 0.0, 0.0);
+        helicopter_body_node.position = glm::vec3(0.0, 100.0, 0.0); // how do i get the correct position?
+        helicopter_body_node.is_helicopter = true;
+        helicopter_door_node.position = glm::vec3(0.0, 0.0, 0.0);
+        helicopter_door_node.is_helicopter = true;
+        helicopter_main_rotor_node.position = glm::vec3(0.0, 0.0, 0.0);
+        helicopter_main_rotor_node.is_helicopter = true;
+        helicopter_tail_rotor_node.position = glm::vec3(0.35, 2.3, 10.4);
+        helicopter_tail_rotor_node.is_helicopter = true;
+
+        helicopter_body_node.rotation = glm::vec3(0.0, 0.0, 0.0); // rotation around y axis
+        helicopter_door_node.rotation = glm::vec3(0.0, 0.0, 0.0);
+        helicopter_main_rotor_node.rotation = glm::vec3(0.0, 0.1, 0.0);
+        helicopter_tail_rotor_node.rotation = glm::vec3(0.1, 0.0, 0.0);
+
+        helicopter_body_node2.position = glm::vec3(100.0, 100.0, 100.0);
+        helicopter_tail_rotor_node2.position = glm::vec3(0.35, 2.3, 10.4);
+    
+        helicopter_body_node.add_child(&helicopter_door_node);
+        helicopter_body_node.add_child(&helicopter_main_rotor_node);
+        helicopter_body_node.add_child(&helicopter_tail_rotor_node);
+        terrain_node.add_child(&helicopter_body_node);
+        root_node.add_child(&terrain_node);
         
-        let mut camera_transformation_matrix: Mat4 = glm::identity();
+
+        helicopter_body_node2.add_child(&helicopter_door_node2);
+        helicopter_body_node2.add_child(&helicopter_main_rotor_node2);
+        helicopter_body_node2.add_child(&helicopter_tail_rotor_node2);
+        terrain_node.add_child(&helicopter_body_node2);
+        
+
         let mut pitch: f32 = 0.0; // rotation around x-axis
-        let mut yaw:f32 = 0.0; // rotation around y-axis
+        let mut yaw: f32 = -90.0_f32.to_radians(); // rotation around y-axis
         let mut roll:f32  = 0.0; // rotation around z-axis
 
-        let mut camera_position = glm::vec3(0.0, 0.0, -5.0);
-        let mut camera_front: Vec<f32> = vec![0.0, 0.0, 0.0];
+        let mut camera_position:Vec3 = glm::vec3(0.0, 0.0, 0.0);
+        let mut camera_front: Vec3 = glm::vec3(0.0, 0.0, -1.0);
+        let camera_up = glm::vec3(0.0, 1.0, 0.0);
 
-        
+        let mouse_sensitivity = 0.003;
+        let mut mouse_enabled = true;
+
 
 
         // Used to demonstrate keyboard handling for exercise 2.
@@ -617,6 +536,29 @@ fn main() {
             let delta_time = now.duration_since(previous_frame_time).as_secs_f32();
             previous_frame_time = now;
 
+
+            let rotor_rotation_speed = 10.0; 
+            //helicopter_body_node.rotation[1] += rotor_rotation_speed* 0.1 * delta_time;
+            helicopter_main_rotor_node.rotation[1] += rotor_rotation_speed * delta_time;
+            helicopter_tail_rotor_node.rotation[0] += rotor_rotation_speed * delta_time;
+
+            let animation: Heading = toolbox::simple_heading_animation(elapsed);
+            helicopter_body_node.position = glm::vec3(animation.x, helicopter_body_node.position[1], animation.z);
+            helicopter_body_node.rotation[2] = animation.roll;
+            helicopter_body_node.rotation[1] = animation.yaw;
+            helicopter_body_node.rotation[0] = animation.pitch;
+
+            helicopter_main_rotor_node2.rotation[1] += rotor_rotation_speed * delta_time;
+            helicopter_tail_rotor_node2.rotation[0] += rotor_rotation_speed * delta_time;
+
+            let animation2: Heading = toolbox::simple_heading_animation(elapsed + 10.0);
+            helicopter_body_node2.position = glm::vec3(animation2.x, helicopter_body_node2.position[1], animation2.z);
+            helicopter_body_node2.rotation[2] = animation2.roll;
+            helicopter_body_node2.rotation[1] = animation2.yaw;
+            helicopter_body_node2.rotation[0] = animation2.pitch;
+
+            
+
             // Handle resize events
             if let Ok(mut new_size) = window_size.lock() {
                 if new_size.2 {
@@ -628,16 +570,9 @@ fn main() {
                 }
             }
 
-            let forward = Vec3::new(
-                camera_front[0].to_radians().cos() * pitch.to_radians().cos(),
-                camera_front[1].to_radians().sin(),
-                camera_front[2].to_radians().sin() * pitch.to_radians().cos()
-            ).normalize();
 
-            let speed: f32 = 5.0 * delta_time;  
+            let speed: f32 = 30.0 * delta_time;  
             let rotation_speed: f32 = 1.0 * delta_time;  
-
-            
             
 
             // Handle keyboard input
@@ -648,51 +583,89 @@ fn main() {
 
 
                     match key {
-                        VirtualKeyCode::W => camera_position.z += speed,  // Move forward
-                        VirtualKeyCode::S => camera_position.z -= speed,  // Move backward
-                        VirtualKeyCode::A => camera_position.x += speed,  // Move left
-                        VirtualKeyCode::D => camera_position.x -= speed,  // Move right
-                        VirtualKeyCode::Space => camera_position.y -= speed,  // Move up
-                        VirtualKeyCode::LShift => camera_position.y += speed,  // Move down
+
+                        
+
+                        VirtualKeyCode::W => camera_position += speed * camera_front,  // Move forward
+                        VirtualKeyCode::S => camera_position -= speed * camera_front,  // Move backward
+                        VirtualKeyCode::A => camera_position -= glm::normalize(&glm::cross(&camera_front, &camera_up)) * speed,   // Move left
+                        VirtualKeyCode::D => camera_position += glm::normalize(&glm::cross(&camera_front, &camera_up)) * speed,  // Move right
+                        VirtualKeyCode::Space => camera_position[1] += speed,  // Move up
+                        VirtualKeyCode::LShift => camera_position[1] -= speed,  // Move down
                         
                         // Rotation
-                        VirtualKeyCode::Up => camera_front[0] -= rotation_speed,  // Rotate up (around X-axis)
-                        VirtualKeyCode::Down => camera_front[0] += rotation_speed,  // Rotate down (around X-axis)
-                        VirtualKeyCode::Left => camera_front[1] += rotation_speed,  // Rotate left (around Y-axis)
-                        VirtualKeyCode::Right => camera_front[1] -= rotation_speed,  // Rotate right (around Y-axis)
+                        VirtualKeyCode::Up => pitch += rotation_speed,  // Rotate up (around X-axis)
+                        VirtualKeyCode::Down => pitch -= rotation_speed,  // Rotate down (around X-axis)
+                        VirtualKeyCode::Left => yaw -= rotation_speed,  // Rotate left (around Y-axis)
+                        VirtualKeyCode::Right => yaw += rotation_speed,  // Rotate right (around Y-axis)
                         // The `VirtualKeyCode` enum is defined here:
                         //    https://docs.rs/winit/0.25.0/winit/event/enum.VirtualKeyCode.html
 
-                        // VirtualKeyCode::A => {
-                        //     _arbitrary_number += delta_time;
-                        // }
-                        // VirtualKeyCode::D => {
-                        //     _arbitrary_number -= delta_time;
-                        // }
+
 
 _ => { }
+                    
+                }
+                // Clamp the pitch value to prevent camera flip
+                if pitch > 89.0_f32.to_radians() {
+                    pitch = 89.0_f32.to_radians();
+                }
+                if pitch < -89.0_f32.to_radians() {
+                    pitch = -89.0_f32.to_radians();
                     }
                 }
             }
             // Handle mouse movement. delta contains the x and y movement of the mouse since last frame in pixels
             if let Ok(mut delta) = mouse_delta.lock() {
 
-                // == // Optionally access the accumulated mouse movement between
-                // == // frames here with `delta.0` and `delta.1`
+                if mouse_enabled{
 
-                *delta = (0.0, 0.0); // reset when done
+                    
+                    yaw += delta.0 as f32 * mouse_sensitivity;
+                    pitch -= delta.1 as f32 * mouse_sensitivity;
+
+                    // Clamp the pitch value to prevent camera flip
+                    let pitch_limit = 89.0_f32.to_radians();
+                    if pitch > pitch_limit {
+                        pitch = pitch_limit;
+                    }
+                    if pitch < -pitch_limit {
+                        pitch = -pitch_limit;
+                    }
+
+                    let front = glm::vec3(
+                        yaw.cos() * pitch.cos(),
+                        pitch.sin(),
+                        yaw.sin() * pitch.cos(),
+                    );
+
+                    *delta = (0.0, 0.0); // reset when done
+
+                }
             }
 
                         // default handler:
                         
             // == // Please compute camera transforms here (exercise 2 & 3)
+            let front = glm::vec3(
+                yaw.cos() * pitch.cos(),
+                pitch.sin(),
+                yaw.sin() * pitch.cos()
+            );
+            camera_front = glm::normalize(&front);
 
+            // Compute the view matrix
+            let view = glm::look_at(
+                &camera_position,
+                &(camera_position + camera_front),
+                &camera_up
+            );
 
             // Compute the projection matrix
             let aspect = window_aspect_ratio;
             let fovy = 45.0; // FOV (field of view) in degrees
             let near = 1.0; // near plane
-            let far = 100.0; // far plane
+            let far = 5000.0; // far plane
 
             let perspective_projection: glm::Mat4 = glm::perspective(    
                 aspect, 
@@ -704,13 +677,19 @@ _ => { }
             
 
             // Compute the view matrix
-            let translation = Mat4::new_translation(&camera_position);
-            let rotation_x = glm::rotation(camera_front[0], &glm::vec3(1.0, 0.0, 0.0));
-            let rotation_y = glm::rotation(camera_front[1], &glm::vec3(0.0, 1.0, 0.0));
-            camera_transformation_matrix = translation * rotation_x * rotation_y;
+            // let translation = glm::translation(&glm::vec3(camera_position[0], camera_position[1], camera_position[2]));
+            // let rotation_x = glm::rotation(camera_front[0], &glm::vec3(1.0, 0.0, 0.0));
+            // let rotation_y = glm::rotation(camera_front[1], &glm::vec3(0.0, 1.0, 0.0));
+            // let camera_transformation_matrix = translation * rotation_x * rotation_y;
             
-            let mut identity_matrix: glm::Mat4 = glm::identity();  
-            let mut mixed_matrix = perspective_projection * camera_transformation_matrix * identity_matrix;
+            let identity_matrix: glm::Mat4 = glm::identity();  
+            let mut mixed_matrix = perspective_projection * view * identity_matrix;
+
+            // to fix light
+            let model_matrix: glm::Mat4 = glm::identity(); // TODO: Add transformations here, pass to vertex shader like its done below
+
+
+
 
             unsafe {
                 // Clear the color and depth buffers
@@ -718,35 +697,42 @@ _ => { }
                 gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
 
-                //transformation_matrix = glm::translate(&transformation_matrix, &glm::vec3(f32::sin(elapsed*0.5), f32::sin(elapsed*0.5), 0.0));
-                // Pass the 'transformation_matrix' to the 'transformation_matrix' uniform in the shader
-                let transformation_matrix_location: i32 = gl::GetUniformLocation(shader_program.program_id, "transformation_matrix\0".as_ptr() as *const i8);
-                gl::UniformMatrix4fv(transformation_matrix_location, 1, gl::FALSE, mixed_matrix.as_ptr());
-
+                
                 // Pass the 'elapsed_time' to the 'time' uniform in the shader
-                let time_uniform_location = gl::GetUniformLocation(shader_program.program_id, "time".as_ptr() as *const i8);
-                gl::Uniform1f(time_uniform_location, elapsed);
+                //let time_uniform_location = gl::GetUniformLocation(shader_program.program_id, "time".as_ptr() as *const i8);
+                gl::Uniform1f(1, elapsed);
+
+                
+                
+          
+
                 // == // Issue the necessary gl:: commands to draw your scene here
                 shader_program.activate();
                 // Pass the 'elapsed_time' to the 'time' uniform in the shader
                 
-
-                // Bind the VAO
-                gl::BindVertexArray(vao);
-
-                // Draw the elements
-                gl::DrawElements(
-                    gl::TRIANGLES,
-                    indices.len() as i32,
-                    gl::UNSIGNED_INT,
-                    std::ptr::null()
-                );
-
-    // Unbind the VAO (optional, good practice to prevent accidental modifications)
-    gl::BindVertexArray(0);
+                draw_scene(&root_node, &mixed_matrix, &identity_matrix, shader_program.program_id);
+                
+                
                 
 
 
+
+
+                // Bind the VAO
+
+                // gl::BindVertexArray(helicopter_body_Vao);
+                // is_helicopter = body.is_helicopter;
+                // gl::Uniform1i(2, is_helicopter as i32);
+                // gl::DrawElements(
+                //     gl::TRIANGLES,
+                //     body_indices.len() as i32,
+                //     gl::UNSIGNED_INT,
+                //     std::ptr::null()
+                // );
+
+
+                // Unbind the VAO (optional, good practice to prevent accidental modifications)
+                gl::BindVertexArray(0);
 
             }
 
