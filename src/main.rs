@@ -23,8 +23,8 @@ mod mesh;
 mod scene_graph;
 mod toolbox;
 
-use glm::{normalize_dot, Mat3, Mat4, Vec3};
-use glutin::event::ElementState;
+use glm::{normalize_dot, vec3, Mat3, Mat4, Vec3};
+use glutin::event::{ElementState, MouseScrollDelta};
 use glutin::event::{Event, WindowEvent, DeviceEvent, KeyboardInput, ElementState::{Pressed, Released}, VirtualKeyCode::{self, *}};
 use glutin::event_loop::ControlFlow;
 use mesh::{Helicopter, Mesh};
@@ -466,55 +466,93 @@ fn main() {
 
         let mut root_node: Node = SceneNode::new();
         let mut terrain_node: Node = SceneNode::from_vao(terrain_vao, terrain_indices_lenght as i32);
-        let mut helicopter_body_node: Node = SceneNode::from_vao(helicopter_body_Vao, body_indices.len() as i32);
-        let mut helicopter_door_node: Node = SceneNode::from_vao(helicopter_door_Vao, door_indices.len() as i32);
-        let mut helicopter_main_rotor_node: Node = SceneNode::from_vao(helicopter_main_rotor_Vao, main_rotor_indices.len() as i32);
-        let mut helicopter_tail_rotor_node: Node = SceneNode::from_vao(helicopter_tail_rotor_Vao, tail_rotor_indices.len() as i32);
-
-        let mut helicopter_body_node2: Node = SceneNode::from_vao(helicopter_body_Vao, body_indices.len() as i32);
-        let mut helicopter_door_node2: Node = SceneNode::from_vao(helicopter_door_Vao, door_indices.len() as i32);
-        let mut helicopter_main_rotor_node2: Node = SceneNode::from_vao(helicopter_main_rotor_Vao, main_rotor_indices.len() as i32);
-        let mut helicopter_tail_rotor_node2: Node = SceneNode::from_vao(helicopter_tail_rotor_Vao, tail_rotor_indices.len() as i32);
-
+        let mut camera_node: Node = SceneNode::new();
         
 
         terrain_node.position = glm::vec3(0.0, 0.0, 0.0);
-        helicopter_body_node.position = glm::vec3(0.0, 100.0, 0.0); // how do i get the correct position?
-        helicopter_body_node.is_helicopter = true;
-        helicopter_door_node.position = glm::vec3(0.0, 0.0, 0.0);
-        helicopter_door_node.is_helicopter = true;
-        helicopter_main_rotor_node.position = glm::vec3(0.0, 0.0, 0.0);
-        helicopter_main_rotor_node.is_helicopter = true;
-        helicopter_tail_rotor_node.position = glm::vec3(0.35, 2.3, 10.4);
-        helicopter_tail_rotor_node.is_helicopter = true;
+        
+        let mut aniamtion_nodes: Vec<Node> = vec![];
+        let mut helicopter_body_nodes: Vec<Node>  = vec![];
+        let mut helicopter_door_nodes: Vec<Node>  = vec![];
+        let mut helicopter_main_rotor_nodes: Vec<Node>  = vec![];
+        let mut helicopter_tail_rotor_nodes: Vec<Node>  = vec![];
 
-        helicopter_body_node.rotation = glm::vec3(0.0, 0.0, 0.0); // rotation around y axis
-        helicopter_door_node.rotation = glm::vec3(0.0, 0.0, 0.0);
-        helicopter_main_rotor_node.rotation = glm::vec3(0.0, 0.1, 0.0);
-        helicopter_tail_rotor_node.rotation = glm::vec3(0.1, 0.0, 0.0);
+        // loop through a number of helicopters to create them. 
 
-        helicopter_body_node2.position = glm::vec3(100.0, 100.0, 100.0);
-        helicopter_tail_rotor_node2.position = glm::vec3(0.35, 2.3, 10.4);
-    
-        helicopter_body_node.add_child(&helicopter_door_node);
-        helicopter_body_node.add_child(&helicopter_main_rotor_node);
-        helicopter_body_node.add_child(&helicopter_tail_rotor_node);
-        terrain_node.add_child(&helicopter_body_node);
+        for i in 0..5 {
+
+            
+            let mut aniamtion_node: Node = SceneNode::new();
+            
+            let mut helicopter_body_node: Node = SceneNode::from_vao(helicopter_body_Vao, body_indices.len() as i32);
+            let mut helicopter_door_node: Node = SceneNode::from_vao(helicopter_door_Vao, door_indices.len() as i32);
+            let mut helicopter_main_rotor_node: Node = SceneNode::from_vao(helicopter_main_rotor_Vao, main_rotor_indices.len() as i32);
+            let mut helicopter_tail_rotor_node: Node = SceneNode::from_vao(helicopter_tail_rotor_Vao, tail_rotor_indices.len() as i32);
+
+            helicopter_body_node.position = glm::vec3(0.0, 0.0, 0.0); // how do i get the correct position?
+            helicopter_body_node.is_helicopter = true;
+            helicopter_door_node.position = glm::vec3(0.0, 0.0, 0.0);
+            helicopter_door_node.is_helicopter = true;
+            helicopter_main_rotor_node.position = glm::vec3(0.0, 0.0, 0.0);
+            helicopter_main_rotor_node.is_helicopter = true;
+            helicopter_tail_rotor_node.reference_point = glm::vec3(0.35, 2.3, 10.4);
+            helicopter_tail_rotor_node.is_helicopter = true;
+
+            helicopter_body_node.rotation = glm::vec3(0.0, 0.0, 0.0); // rotation around y axis
+            helicopter_door_node.rotation = glm::vec3(0.0, 0.0, 0.0);
+            helicopter_main_rotor_node.rotation = glm::vec3(0.0, 0.1, 0.0);
+            helicopter_tail_rotor_node.rotation = glm::vec3(0.1, 0.0, 0.0);
+
+
+            
+            helicopter_body_node.add_child(&helicopter_door_node);
+            helicopter_body_node.add_child(&helicopter_main_rotor_node);
+            helicopter_body_node.add_child(&helicopter_tail_rotor_node);
+            
+            
+            aniamtion_node.position = glm::vec3(100.0, 500.0, 100.0);
+            aniamtion_node.add_child(&helicopter_body_node);
+            terrain_node.add_child(&aniamtion_node);
+
+            
+            
+            terrain_node.add_child(&aniamtion_node);
+            aniamtion_nodes.push(aniamtion_node);
+            
+            
+            
+            
+            
+
+            
+            helicopter_body_nodes.push(helicopter_body_node);
+            helicopter_door_nodes.push(helicopter_door_node);
+            helicopter_main_rotor_nodes.push(helicopter_main_rotor_node);
+            helicopter_tail_rotor_nodes.push(helicopter_tail_rotor_node);
+
+
+        }
         root_node.add_child(&terrain_node);
+
+        let mut camera_node: Node = SceneNode::new();
+        camera_node.position = glm::vec3(0.0, 0.0, 0.0);
+        camera_node.rotation = glm::vec3(0.0, 0.0, 0.0);
+        terrain_node.add_child(&camera_node);
+
         
 
-        helicopter_body_node2.add_child(&helicopter_door_node2);
-        helicopter_body_node2.add_child(&helicopter_main_rotor_node2);
-        helicopter_body_node2.add_child(&helicopter_tail_rotor_node2);
-        terrain_node.add_child(&helicopter_body_node2);
+
+        
+
         
 
         let mut pitch: f32 = 0.0; // rotation around x-axis
         let mut yaw: f32 = -90.0_f32.to_radians(); // rotation around y-axis
         let mut roll:f32  = 0.0; // rotation around z-axis
 
+        
         let mut camera_position:Vec3 = glm::vec3(0.0, 0.0, 0.0);
-        let mut camera_front: Vec3 = glm::vec3(0.0, 0.0, -1.0);
+        //let mut camera_front: Vec3 = glm::vec3(0.0, 0.0, -1.0);
         let camera_up = glm::vec3(0.0, 1.0, 0.0);
 
         let mouse_sensitivity = 0.003;
@@ -538,24 +576,34 @@ fn main() {
 
 
             let rotor_rotation_speed = 10.0; 
-            //helicopter_body_node.rotation[1] += rotor_rotation_speed* 0.1 * delta_time;
-            helicopter_main_rotor_node.rotation[1] += rotor_rotation_speed * delta_time;
-            helicopter_tail_rotor_node.rotation[0] += rotor_rotation_speed * delta_time;
+            let helicopter_animation_offset: f32 = 2.0;
 
-            let animation: Heading = toolbox::simple_heading_animation(elapsed);
-            helicopter_body_node.position = glm::vec3(animation.x, helicopter_body_node.position[1], animation.z);
-            helicopter_body_node.rotation[2] = animation.roll;
-            helicopter_body_node.rotation[1] = animation.yaw;
-            helicopter_body_node.rotation[0] = animation.pitch;
+            // Update the rotation of the rotors
+            for i in 0..helicopter_body_nodes.len() {
+                helicopter_main_rotor_nodes[i].rotation[1] += rotor_rotation_speed * delta_time;
+                helicopter_tail_rotor_nodes[i].rotation[0] += rotor_rotation_speed * delta_time;
+            }
 
-            helicopter_main_rotor_node2.rotation[1] += rotor_rotation_speed * delta_time;
-            helicopter_tail_rotor_node2.rotation[0] += rotor_rotation_speed * delta_time;
+            
+            
+            
+            
+            
+            for i in 1..aniamtion_nodes.len() {
+                
+                let animation: Heading = toolbox::simple_heading_animation(elapsed + (i as f32)*helicopter_animation_offset as f32);
+                aniamtion_nodes[i].position = glm::vec3(animation.x,  aniamtion_nodes[i].position.y, animation.z);
+                aniamtion_nodes[i].rotation[2] = animation.roll;
+                aniamtion_nodes[i].rotation[1] = animation.yaw;
+                aniamtion_nodes[i].rotation[0] = animation.pitch;
 
-            let animation2: Heading = toolbox::simple_heading_animation(elapsed + 10.0);
-            helicopter_body_node2.position = glm::vec3(animation2.x, helicopter_body_node2.position[1], animation2.z);
-            helicopter_body_node2.rotation[2] = animation2.roll;
-            helicopter_body_node2.rotation[1] = animation2.yaw;
-            helicopter_body_node2.rotation[0] = animation2.pitch;
+                
+            
+            }
+
+            
+
+            
 
             
 
@@ -577,35 +625,40 @@ fn main() {
 
             // Handle keyboard input
             if let Ok(keys) = pressed_keys.lock() {
+                
+                let rotation =  camera_node.rotation.clone();
+                
+
                 for key in keys.iter() {
                     // if key is pressed, move the camera
 
 
 
                     match key {
-
                         
 
-                        VirtualKeyCode::W => camera_position += speed * camera_front,  // Move forward
-                        VirtualKeyCode::S => camera_position -= speed * camera_front,  // Move backward
-                        VirtualKeyCode::A => camera_position -= glm::normalize(&glm::cross(&camera_front, &camera_up)) * speed,   // Move left
-                        VirtualKeyCode::D => camera_position += glm::normalize(&glm::cross(&camera_front, &camera_up)) * speed,  // Move right
-                        VirtualKeyCode::Space => camera_position[1] += speed,  // Move up
-                        VirtualKeyCode::LShift => camera_position[1] -= speed,  // Move down
+
+                        VirtualKeyCode::W => camera_node.position += speed * rotation,  // Move forward
+                        VirtualKeyCode::S => camera_node.position -= speed * rotation,  // Move backward
+                        VirtualKeyCode::A => camera_node.position -= glm::normalize(&glm::cross(&rotation, &camera_up)) * speed,   // Move left
+                        VirtualKeyCode::D => camera_node.position += glm::normalize(&glm::cross(&rotation, &camera_up)) * speed,  // Move right
+                        VirtualKeyCode::Space => camera_node.position[1] += speed,  // Move up
+                        VirtualKeyCode::LShift => camera_node.position[1] -= speed,  // Move down
                         
                         // Rotation
-                        VirtualKeyCode::Up => pitch += rotation_speed,  // Rotate up (around X-axis)
-                        VirtualKeyCode::Down => pitch -= rotation_speed,  // Rotate down (around X-axis)
+                        VirtualKeyCode::Up => pitch += rotation_speed*0.1,  // Rotate up (around X-axis)
+                        VirtualKeyCode::Down => pitch -= rotation_speed*0.1,  // Rotate down (around X-axis)
                         VirtualKeyCode::Left => yaw -= rotation_speed,  // Rotate left (around Y-axis)
                         VirtualKeyCode::Right => yaw += rotation_speed,  // Rotate right (around Y-axis)
                         // The `VirtualKeyCode` enum is defined here:
                         //    https://docs.rs/winit/0.25.0/winit/event/enum.VirtualKeyCode.html
 
 
-
 _ => { }
                     
                 }
+                
+
                 // Clamp the pitch value to prevent camera flip
                 if pitch > 89.0_f32.to_radians() {
                     pitch = 89.0_f32.to_radians();
@@ -616,6 +669,8 @@ _ => { }
                 }
             }
             // Handle mouse movement. delta contains the x and y movement of the mouse since last frame in pixels
+            
+
             if let Ok(mut delta) = mouse_delta.lock() {
 
                 if mouse_enabled{
@@ -633,12 +688,7 @@ _ => { }
                         pitch = -pitch_limit;
                     }
 
-                    let front = glm::vec3(
-                        yaw.cos() * pitch.cos(),
-                        pitch.sin(),
-                        yaw.sin() * pitch.cos(),
-                    );
-
+                    
                     *delta = (0.0, 0.0); // reset when done
 
                 }
@@ -652,12 +702,14 @@ _ => { }
                 pitch.sin(),
                 yaw.sin() * pitch.cos()
             );
-            camera_front = glm::normalize(&front);
+            camera_node.rotation = glm::normalize(&front);
+
+            
 
             // Compute the view matrix
             let view = glm::look_at(
-                &camera_position,
-                &(camera_position + camera_front),
+                &camera_node.position,
+                &(camera_node.position + camera_node.rotation),
                 &camera_up
             );
 
@@ -673,14 +725,6 @@ _ => { }
                 near, 
                 far
             );
-
-            
-
-            // Compute the view matrix
-            // let translation = glm::translation(&glm::vec3(camera_position[0], camera_position[1], camera_position[2]));
-            // let rotation_x = glm::rotation(camera_front[0], &glm::vec3(1.0, 0.0, 0.0));
-            // let rotation_y = glm::rotation(camera_front[1], &glm::vec3(0.0, 1.0, 0.0));
-            // let camera_transformation_matrix = translation * rotation_x * rotation_y;
             
             let identity_matrix: glm::Mat4 = glm::identity();  
             let mut mixed_matrix = perspective_projection * view * identity_matrix;
@@ -711,25 +755,6 @@ _ => { }
                 // Pass the 'elapsed_time' to the 'time' uniform in the shader
                 
                 draw_scene(&root_node, &mixed_matrix, &identity_matrix, shader_program.program_id);
-                
-                
-                
-
-
-
-
-                // Bind the VAO
-
-                // gl::BindVertexArray(helicopter_body_Vao);
-                // is_helicopter = body.is_helicopter;
-                // gl::Uniform1i(2, is_helicopter as i32);
-                // gl::DrawElements(
-                //     gl::TRIANGLES,
-                //     body_indices.len() as i32,
-                //     gl::UNSIGNED_INT,
-                //     std::ptr::null()
-                // );
-
 
                 // Unbind the VAO (optional, good practice to prevent accidental modifications)
                 gl::BindVertexArray(0);
